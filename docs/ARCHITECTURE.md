@@ -93,11 +93,11 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 8. Inventory page uses an extra read-only query (one row per PDB and instance, with instance name and
    RESTRICTED) so open modes can be shown per instance; pre-flight keeps the script's exact query.
    Names are filtered in code to `PREFIX_NNN`, because `LIKE 'PREFIX%'` also matches other names.
+9. A graceful backend stop (SIGTERM / systemd stop) stops the active run's processes like Stop all;
+   a crash leaves them, and the next start marks the run interrupted (Kill leftovers: M5).
 10. Workload exit codes in `status.tsv` use bash's `128+signal` form (143 after Stop all), like the
     script. Error text is counted live from each charbench's output (tiles flag it while running) and
     recounted from the log file at the end, which is what `summary.tsv` reports.
-9. A graceful backend stop (SIGTERM / systemd stop) stops the active run's processes like Stop all;
-   a crash leaves them, and the next start marks the run interrupted (Kill leftovers: M5).
 
 ## 7. Simulation mode
 

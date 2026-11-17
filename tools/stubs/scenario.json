@@ -1,0 +1,38 @@
+{
+  "_comment": "Simulation scenario. Copy and point ORCH_SIM_SCENARIO at your copy to change it. Delete var/sim/state.json (or run tools/stubs/simctl reset) after changing initial_pdbs.",
+  "time_scale": 1.0,
+  "cdb": {
+    "name": "SIMCDB",
+    "version": "19.0.0.0.0",
+    "instances": ["simcdb1", "simcdb2"],
+    "cluster_database": "TRUE",
+    "wallet": true,
+    "sysdba": "ok"
+  },
+  "initial_pdbs": [
+    {"prefix": "PDBPP", "first": 1, "last": 250, "soe_loaded": true}
+  ],
+  "delays": {
+    "sqlplus": 0.05,
+    "create_pdb": 0.6,
+    "open_pdb": 0.3,
+    "drop_pdb": 0.4,
+    "check_ok": 0.3,
+    "oewizard": 4.0
+  },
+  "charbench": {
+    "seconds_per_minute": 1.0,
+    "line_interval": 1.0
+  },
+  "pdb_scenarios": {
+    "PDBPP_003": {"check": "ora12514"},
+    "PDBPP_007": {"check": "hang"},
+    "PDBPP_011": {"check": "wrong_container"},
+    "PDBPP_013": {"check": "no_schema"},
+    "PDBPP_017": {"load": "fail"},
+    "PDBPP_019": {"workload": "errors"},
+    "PDBPP_023": {"workload": "exit1"},
+    "PDBPP_029": {"open": "mounted"},
+    "PDBPP_031": {"create": "fail"}
+  }
+}

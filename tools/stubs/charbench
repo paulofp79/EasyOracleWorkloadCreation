@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Simulated Swingbench charbench.
+
+Prints a Swingbench-like header and table, writes the -r results file, records
+its arguments (password masked) under <state dir>/charbench-args/<PDB>.json and
+spawns a child process so that process-group kills can be verified.
+"""
+import json
+import os
+import random
+import subprocess
+import sys
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _simlib as sim  # noqa: E402
+
+
+def runtime_seconds(rt):
+    parts = [int(x) for x in rt.split(":")]
+    while len(parts) < 3:
+        parts.append(0)
+    h, m, s = parts
+    minutes = h * 60 + m + s / 60.0
+    return minutes * float(sim.SCENARIO.get("charbench", {}).get("seconds_per_minute", 1.0))
+
+
+def main():
+    argv = sys.argv[1:]
+    cs = sim.arg_value(argv, "-cs")
+    pdb = sim.pdb_from_connect(cs) or "UNKNOWN"
+    rt = sim.arg_value(argv, "-rt") or "00:01"
+    users = int(sim.arg_value(argv, "-uc") or 1)
+    results = sim.arg_value(argv, "-r")
+
+    rec_dir = os.path.join(os.path.dirname(sim.state_path()), "charbench-args")
+    os.makedirs(rec_dir, exist_ok=True)
+    masked = list(argv)
+    if "-p" in masked and masked.index("-p") + 1 < len(masked):
+        masked[masked.index("-p") + 1] = "********"
+    with open(os.path.join(rec_dir, pdb + ".json"), "w") as fh:
+        json.dump({"argv": masked, "pid": os.getpid(), "pgid": os.getpgid(0), "cwd": os.getcwd(),
+                   "password_given": "-p" in argv}, fh)
+
+    # A child in the same process group (like the JVM's helpers). It must die with us.
+    child = subprocess.Popen(["sleep", "86400"])
+    with open(os.path.join(rec_dir, pdb + ".child"), "w") as fh:
+        fh.write(str(child.pid))
+
+    with sim.locked_state() as st:
+        p = st["pdbs"].get(pdb)
+    if not p or "READ WRITE" not in p["open"]:
+        sim.out("Connection failure: java.sql.SQLRecoverableException: Listener refused the connection with "
+                "the following error: ORA-12514")
+        child.kill()
+        return 1
+
+    scen = sim.pdb_scenario(pdb, "workload")
+    sim.out("Swingbench 2.7.0.1313 (simulated)", "Copyright (c) 2005-2024 Dominic Giles. All rights reserved.",
+            "Started on %s" % time.strftime("%d %b %Y %H:%M:%S"),
+            "Connecting to %s as soe, %d users, runtime %s" % (cs, users, rt),
+            "Time     Users       TPM      TPS     Errors   NCR   UCD   BP    OP    PO    BO    SQ    WQ    WA")
+    total = runtime_seconds(rt) if scen != "long" else 10 ** 9
+    interval = float(sim.SCENARIO.get("charbench", {}).get("line_interval", 1.0))
+    start = time.time()
+    errors = 0
+    tick = 0
+    while time.time() - start < total:
+        time.sleep(min(interval, max(0.01, total - (time.time() - start))))
+        tick += 1
+        tps = random.randint(80, 120) * users
+        if scen == "errors" and tick % 3 == 0:
+            errors += 1
+            sim.out("java.sql.SQLException: ORA-00942: table or view does not exist")
+        sim.out("%s %5d %9d %8d %8d   %s" % (time.strftime("%H:%M:%S"), users, tps * 60, tps, errors,
+                                            "  ".join(str(random.randint(1, 9)) for _ in range(9))))
+    sim.out("Completed Run.")
+    if results:
+        with open(results, "w") as fh:
+            fh.write('<?xml version="1.0" encoding="UTF-8"?>\n<Results simulated="true" pdb="%s" users="%d" '
+                     'runtime="%s" errors="%d"/>\n' % (pdb, users, rt, errors))
+    child.kill()
+    return 1 if scen == "exit1" else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

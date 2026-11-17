@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Simulated Swingbench oewizard: oewizard -cl -create -cs //h:p/svc -u soe -p pw ..."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _simlib as sim  # noqa: E402
+
+
+def main():
+    argv = sys.argv[1:]
+    if "-h" in argv or "-help" in argv:
+        sim.out("usage: oewizard [options] (simulated)")
+        return 0
+    cs = sim.arg_value(argv, "-cs")
+    pdb = sim.pdb_from_connect(cs)
+    for flag in ("-cl", "-create"):
+        if flag not in argv:
+            sim.out("Missing %s (simulated oewizard only supports command-line create)" % flag)
+            return 1
+    if not pdb or not sim.arg_value(argv, "-p") or not sim.arg_value(argv, "-dbap"):
+        sim.out("Invalid arguments")
+        return 1
+    with sim.locked_state() as st:
+        p = st["pdbs"].get(pdb)
+    if not p or "READ WRITE" not in p["open"]:
+        sim.out("Connection failure: ORA-12514: TNS:listener does not currently know of service "
+                "requested in connect descriptor")
+        return 1
+    scale = sim.arg_value(argv, "-scale")
+    threads = sim.arg_value(argv, "-tc")
+    ts = sim.arg_value(argv, "-ts")
+    sim.out("SwingBench Wizard (simulated)", "Author  :  Dominic Giles", "Version :  2.7.0.1313", "",
+            "Running in Lights Out Mode using config file : ../wizardconfigs/oewizard.xml",
+            "Connecting to : jdbc:oracle:thin:@%s" % cs,
+            "Scale %s, threads %s, tablespace %s" % (scale, threads, ts))
+    total = float(sim.SCENARIO.get("delays", {}).get("oewizard", 4.0))
+    steps = 5
+    for i in range(steps):
+        sim.sim_sleep(total / steps)
+        sim.out("Step %d/%d: loading data ... %d%%" % (i + 1, steps, (i + 1) * 100 // steps))
+        if sim.pdb_scenario(pdb, "load") == "fail" and i == 2:
+            sim.out("java.sql.SQLException: ORA-01652: unable to extend temp segment by 128 in tablespace TEMP",
+                    "Schema creation failed")
+            return 1
+    with sim.locked_state(write=True) as st:
+        if pdb in st["pdbs"]:
+            st["pdbs"][pdb]["soe_loaded"] = True
+    sim.out("Schema Created", "Completed Run.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

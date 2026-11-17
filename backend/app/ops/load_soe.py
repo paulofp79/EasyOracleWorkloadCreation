@@ -182,8 +182,9 @@ class LoadSoe(Operation):
                 if r.cancelled:
                     ctx.set_item(pdb, state="cancelled", ended_at=utcnow(), detail="stopped during SOE setup")
                     return
-                if r.exit_code != 0:
-                    err = first_error(r.output) or f"exit code {r.exit_code}"
+                logon = conn.logon_failure(r.output)
+                if r.exit_code != 0 or logon:
+                    err = logon or first_error(r.output) or f"exit code {r.exit_code}"
                     failed.append(pdb)
                     ctx.set_item(pdb, state="failed", ended_at=utcnow(), exit_code=r.exit_code,
                                  detail=f"SOE setup failed: {err}")

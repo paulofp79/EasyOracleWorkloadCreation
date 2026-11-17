@@ -123,9 +123,11 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 
 The decision "backend on the DB host with OS-authenticated sqlplus" (PROJECT_CONTEXT §14) became one
 of two profile settings. `cdb_connect = local` keeps `sqlplus -L -s / as sysdba`. `cdb_connect = remote`
-runs `sqlplus -L -s sys@//<scan>:<port>/<cdb_service> as sysdba` from a separate server; sqlplus reads
-the SYS password from the first stdin line (never argv), and `-L` makes a failed logon exit at once,
-so no statement runs unconnected. All privileged SQL goes through `app/sysdba.py`. The SYS password
+runs `sqlplus -L -s /nolog` and, on stdin, `CONNECT sys/"<pw>"@//<scan>:<port>/<cdb_service> AS SYSDBA`
+(the CONNECT form run_charbench_all_pdbs.sh already uses for SOE; an earlier command-line logon form
+was rejected by SQL*Plus with SP2-0306 on the user's server). A failed CONNECT does not stop SQL*Plus
+and may exit 0, so every remote session selects a marker right after CONNECT and output without it
+counts as a failed logon (inventory, pre-flight, create, drop, GRANT, environment check). All privileged SQL goes through `app/sysdba.py`. The SYS password
 comes from the request or from an in-memory, per-browser session (HttpOnly SameSite=Strict cookie,
 1–24 h expiry, verified by a SYSDBA logon when set, lost on restart, never written anywhere).
 

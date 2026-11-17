@@ -87,6 +87,9 @@ class Operation:
         for k in raw_secrets:
             if k not in cls.SECRETS:
                 errors[f"secrets.{k}"] = "unknown secret"
+        if params.get("cdb_connect") == "remote" and '"' in str(raw_secrets.get("sys_password") or ""):
+            errors["secrets.sys_password"] = 'must not contain a double quote (") for a remote CDB connection'
+            secrets.pop("sys_password", None)
         if not errors:
             try:
                 cls.check(params, final=need_secrets)

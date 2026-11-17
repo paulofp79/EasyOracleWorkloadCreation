@@ -57,8 +57,9 @@ async def drop_one(ctx, pdb: str, rac: bool) -> bool:
     if r.cancelled:
         ctx.set_item(pdb, state="cancelled", ended_at=utcnow(), detail="stopped while dropping", exit_code=r.exit_code)
         return False
-    if r.exit_code != 0:
-        err = first_error(r.output) or f"sqlplus exited with code {r.exit_code}"
+    logon = conn.logon_failure(r.output)
+    if r.exit_code != 0 or logon:
+        err = logon or first_error(r.output) or f"sqlplus exited with code {r.exit_code}"
         ctx.set_item(pdb, state="failed", ended_at=utcnow(), exit_code=r.exit_code, detail=f"drop failed: {err}")
         ctx.log(f"drop failed for {pdb}: {err}")
         return False
@@ -201,8 +202,9 @@ class CreatePdbs(Operation):
                 ctx.set_item(pdb, state="cancelled", ended_at=utcnow(), detail="stopped while creating",
                              exit_code=r.exit_code)
                 break
-            if r.exit_code != 0:
-                err = first_error(r.output) or f"sqlplus exited with code {r.exit_code}"
+            logon = conn.logon_failure(r.output)
+            if r.exit_code != 0 or logon:
+                err = logon or first_error(r.output) or f"sqlplus exited with code {r.exit_code}"
                 ctx.set_item(pdb, state="failed", ended_at=utcnow(), exit_code=r.exit_code, detail=err)
                 ctx.update_run(message=f"PDB setup failed for {pdb}: {err}. Stopped; see {pdb}-create.log.")
                 ctx.log(f"create failed for {pdb}: {err}")

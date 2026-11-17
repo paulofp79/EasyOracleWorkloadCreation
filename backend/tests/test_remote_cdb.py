@@ -19,13 +19,30 @@ SOE = "Soe-Remote-UniquePw-40"
 def test_conn_local_and_remote():
     local = SysdbaConn.from_params({"cdb_connect": "local"}, None)
     assert local.argv() == ["sqlplus", "-L", "-s", "/", "as", "sysdba"] and local.stdin("X") == "X"
+    assert local.logon_failure("anything") is None
     remote = SysdbaConn.from_params({"cdb_connect": "remote", "scan_host": "scan1", "scan_port": 1521,
-                                     "cdb_service": "cdb1.example.com"}, "p@ss w\"rd")
-    assert remote.argv() == ["sqlplus", "-L", "-s", "sys@//scan1:1521/cdb1.example.com", "as", "sysdba"]
+                                     "cdb_service": "cdb1.example.com"}, "p@ss w#rd")
+    assert remote.argv() == ["sqlplus", "-L", "-s", "/nolog"]
     assert "p@ss" not in " ".join(remote.argv())                     # password never on a command line
-    assert remote.stdin("SELECT 1;\n") == 'p@ss w"rd\nSELECT 1;\n'    # first stdin line answers the prompt
+    text = remote.stdin("SELECT 1 FROM dual;\n")
+    assert text.startswith('CONNECT sys/"p@ss w#rd"@//scan1:1521/cdb1.example.com AS SYSDBA\n')
+    assert text.endswith("SELECT 1 FROM dual;\n") and "SYSDBA_' || 'SESSION_OK" in text
+    assert remote.logon_failure("C\n---\nSYSDBA_SESSION_OK\n") is None
+    assert remote.logon_failure("ERROR:\nORA-01017: invalid username/password; logon denied\nSP2-0640: Not connected") \
+        == "ORA-01017: invalid username/password; logon denied"
+    assert remote.describe() == "sys@//scan1:1521/cdb1.example.com as sysdba"
     with pytest.raises(SysPasswordMissing):
         SysdbaConn.from_params({"cdb_connect": "remote"}, None).require()
+
+
+def test_connect_syntax_matches_the_soe_check_in_run_charbench():
+    """Same CONNECT form the user's script runs successfully: user/"pw"@//scan:port/service."""
+    from app.sqlbuild import check_sql
+    soe = [ln for ln in check_sql("pw", "//scan1:1521/svc").splitlines() if ln.startswith("CONNECT")][0]
+    sys_ = SysdbaConn.from_params({"cdb_connect": "remote", "scan_host": "scan1", "scan_port": 1521,
+                                   "cdb_service": "svc"}, "pw").stdin("").splitlines()[0]
+    assert soe == 'CONNECT soe/"pw"@//scan1:1521/svc'
+    assert sys_ == 'CONNECT sys/"pw"@//scan1:1521/svc AS SYSDBA'
 
 
 @pytest.fixture
@@ -133,3 +150,23 @@ def test_forget(remote):
     login(remote)
     assert remote.delete("/api/session/sys-password").json()["sys_password_set"] is False
     assert remote.get("/api/pdbs").status_code == 428
+
+
+def test_failed_logon_with_exit_0_is_not_success(remote, sim_settings):
+    """A wrong SYS password reaching a run (e.g. changed in the database meanwhile) must not look like success."""
+    from app.sessions import COOKIE as SID
+    assert login(remote).status_code == 200
+    scen = json.loads(sim_settings.sim_scenario.read_text())
+    scenario(sim_settings, cdb={**scen["cdb"], "sys_password": "changed-in-the-db"})
+    r = remote.get("/api/pdbs")
+    assert r.status_code == 502 and "ORA-01017" in r.json()["error"]          # not an empty inventory
+    r = remote.post("/api/runs", json={"type": "create", "params": {"first": 41, "last": 41, "use_wallet": False},
+                                       "secrets": {"pdb_admin_password": ADMIN, "sys_password": SYS}})
+    run = wait(remote, r.json()["run_id"])
+    assert run["status"] == "failed" and "ORA-01017" in run["message"]       # pre-flight refused, nothing created
+    assert SID in remote.cookies
+
+
+def test_double_quote_rejected_for_remote_sys(remote):
+    r = remote.put("/api/session/sys-password", json={"sys_password": 'a"b', "hours": 1})
+    assert r.status_code == 422 and "double quote" in r.json()["errors"]["sys_password"]

@@ -34,6 +34,7 @@ PATTERNS = [
     ("tde", re.compile(r"ADMINISTER\s+KEY\s+MANAGEMENT", re.I)),
     ("grant", re.compile(r"GRANT\s+DBA\s+TO\s+soe\b", re.I)),
     ("env", re.compile(r"'ENV_CHECK\|'")),
+    ("token", re.compile(r"'SYSDBA_'\s*\|\|\s*'SESSION_OK'")),
     ("inventory_detail", re.compile(r"'PDB\|'.*?LIKE\s+'([A-Za-z0-9_]+)%'", re.I | re.S)),
     ("inventory", re.compile(r"FROM\s+gv\$pdbs\s+WHERE\s+name\s+LIKE\s+'([A-Za-z0-9_]+)%'", re.I)),
 ]
@@ -55,6 +56,9 @@ def n_instances():
 
 
 def handle(kind, m, ctx):
+    if kind == "token":
+        sim.out("C", "-----------------", "SYSDBA_SESSION_OK")
+        return
     if kind == "env":
         cdb = sim.SCENARIO["cdb"]
         sim.out("ENV_CHECK|%s|%s|%d|YES|CDB$ROOT|%s" % (
@@ -165,7 +169,29 @@ def run_sysdba(sql):
     return 0
 
 
+def statements_after(sql, pos):
+    return [ln for ln in sql[pos:].splitlines() if ln.strip().endswith(";") or ln.strip() == "/"]
+
+
 def run_nolog(sql):
+    sysm = re.search(r'CONNECT\s+sys/"([^"\n]*)"@(\S+)\s+AS\s+SYSDBA[^\n]*\n', sql, re.I)
+    if sysm:
+        cdb = sim.SCENARIO["cdb"]
+        password, target = sysm.group(1), sysm.group(2)
+        service = target.rsplit("/", 1)[-1].lower()
+        expected_pw = cdb.get("sys_password")
+        error = None
+        if service != cdb.get("service", "simcdb.example.com").lower():
+            error = "ORA-12514: TNS:listener does not currently know of service requested in connect descriptor"
+        elif not password or (expected_pw is not None and password != expected_pw):
+            error = "ORA-01017: invalid username/password; logon denied"
+        if error:
+            # Like real SQL*Plus: the script goes on unconnected and the exit code is still 0.
+            sim.out("ERROR:", error, "")
+            for _ in statements_after(sql, sysm.end()):
+                sim.out("SP2-0640: Not connected")
+            return 0
+        return run_sysdba(sql[sysm.end():])
     m = re.search(r"CONNECT\s+(\w+)/\"[^\"\n]*\"@(\S+)", sql, re.I)
     if not m:
         sim.out("SP2-0640: Not connected")
@@ -205,22 +231,6 @@ def main():
     sql = sys.stdin.read()
     if "/nolog" in args:
         return run_nolog(sql)
-    remote = [a for a in args if re.match(r"(?i)^sys@//", a)]
-    if remote and "sysdba" in [a.lower() for a in args]:
-        # Remote logon: sqlplus prompts for the password and reads the first stdin line.
-        password, _, sql = sql.partition("\n")
-        cdb = sim.SCENARIO["cdb"]
-        service = remote[0].rsplit("/", 1)[-1].lower()
-        expected_pw = cdb.get("sys_password")
-        if service != cdb.get("service", "simcdb.example.com").lower():
-            sim.out("ERROR:", "ORA-12514: TNS:listener does not currently know of service requested in connect "
-                    "descriptor", "", "", "SP2-0751: Unable to connect to Oracle.  Exiting SQL*Plus")
-            return 1
-        if not password or (expected_pw is not None and password != expected_pw):
-            sim.out("ERROR:", "ORA-01017: invalid username/password; logon denied", "", "",
-                    "SP2-0751: Unable to connect to Oracle.  Exiting SQL*Plus")
-            return 1
-        return run_sysdba(sql)
     if "/" in args and "sysdba" in args:
         return run_sysdba(sql)
     sim.out("SP2-0306: Invalid option.")

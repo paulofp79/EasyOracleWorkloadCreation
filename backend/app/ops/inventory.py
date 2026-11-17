@@ -38,6 +38,8 @@ async def query_inventory(settings: Settings, prefix: str, conn: SysdbaConn) -> 
         raise InventoryError(str(exc)) from exc
     if r.timed_out:
         raise InventoryError(f"inventory query timed out after {QUERY_TIMEOUT}s")
+    if (why := conn.logon_failure(r.output)):
+        raise InventoryError(why)
     if r.exit_code != 0 and not any(ln.startswith(PDB_TOKEN) for ln in r.tail):
         raise InventoryError(first_error(r.output) or f"sqlplus exited with code {r.exit_code}")
     rx = numbered(prefix)
@@ -55,6 +57,8 @@ async def query_preflight(settings: Settings, prefix: str, conn: SysdbaConn,
         raise InventoryError(str(exc)) from exc
     if r.timed_out:
         raise InventoryError(f"pre-flight query timed out after {QUERY_TIMEOUT}s")
+    if (why := conn.logon_failure(r.output)):
+        raise InventoryError(why)
     if r.exit_code != 0:
         raise InventoryError(first_error(r.output) or f"sqlplus exited with code {r.exit_code}")
     rx = numbered(prefix)

@@ -6,7 +6,7 @@ listens on `127.0.0.1:8080` only. Pick one of two layouts (set in the profile, "
 | Layout | Privileged SQL | Needs on the app host |
 |---|---|---|
 | **Local**: app on a database node | `sqlplus / as sysdba` (OS authentication) | Oracle home of the CDB, `ORACLE_SID`, Swingbench + Java |
-| **Remote**: app on a separate server | `sqlplus sys@//<scan>:<port>/<CDB root service> as sysdba` | Oracle Instant Client with SQL*Plus, Swingbench + Java, network to SCAN:1521 |
+| **Remote**: app on a separate server | `sqlplus /nolog` + `CONNECT sys/"…"@//<scan>:<port>/<CDB root service> AS SYSDBA` | Oracle Instant Client with SQL*Plus, Swingbench + Java, network to SCAN:1521 |
 
 In remote mode the SYS password is entered once per browser session ("SYS password" in the top
 bar), checked with a SYSDBA logon, kept in server memory only and given to sqlplus on stdin. The CDB
@@ -49,6 +49,15 @@ which sqlplus && sqlplus -V
 Package names differ between client releases (`dnf search oracle-instantclient` lists them). If only
 `sqlplus64` is on the PATH, add the client's `bin` directory (e.g. `/usr/lib/oracle/*/client64/bin`) to
 `oracle`'s PATH.
+
+Check the remote SYSDBA logon the way the app does it (the password is read without echo and only
+goes to sqlplus on stdin); it must print `CDB$ROOT`:
+
+```bash
+read -rs -p "SYS password: " SYSPW; echo
+printf 'CONNECT sys/"%s"@//%s AS SYSDBA\nselect sys_context(%s) from dual;\nexit\n' "$SYSPW" \
+  "<scan-host>:1521/<cdb-root-service>" "'userenv','con_name'" | sqlplus -L -s /nolog
+```
 
 If the server reaches the internet through a proxy, export it in the shell you use for the following
 steps: `export https_proxy=http://proxy.example.com:80 http_proxy=$https_proxy`.

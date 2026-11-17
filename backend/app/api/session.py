@@ -54,6 +54,8 @@ async def set_sys_password(body: SysIn, request: Request, response: Response):
     if not 0 < body.hours <= MAX_HOURS:
         raise v.ValidationError({"hours": f"must be between 0 and {MAX_HOURS}"})
     params = v.profile_params(db(request).active_profile())
+    if params["cdb_connect"] == "remote" and '"' in pw:
+        raise v.ValidationError({"sys_password": 'must not contain a double quote (") for a remote CDB connection'})
     if params["cdb_connect"] == "remote":
         # Verify before keeping it, so a typo is reported now and not in the middle of a run.
         res = await run_env_check(settings(request), params, pw)

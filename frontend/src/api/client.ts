@@ -104,6 +104,7 @@ export interface Run {
   summary: Record<string, any> | null;
   message: string | null;
   retry_of: string | null;
+  leftovers?: number;
   counts: Partial<Record<ItemState, number>>;
   total: number;
   event_seq: number | null;
@@ -161,6 +162,20 @@ export interface SessionState {
   connection: string;
 }
 
+export interface RunFilter { type?: string; status?: string; q?: string; since?: string; limit?: number; offset?: number }
+export interface Artifact { path: string; size: number; mtime: number; kind: "summary" | "results" | "log" }
+export interface Leftover { pdb: string; pid: number; pgid: number; members: number[] }
+export interface CompareCell { state: string; exit_code: number | null; error_count: number | null; duration_s: number | null; detail: string | null }
+export interface Comparison {
+  a: Partial<Run>; b: Partial<Run>;
+  params: { key: string; label: string; a: unknown; b: unknown; differs: boolean }[];
+  metrics: { key: string; label: string; a: unknown; b: unknown }[];
+  pdbs: { pdb: string; a: CompareCell | null; b: CompareCell | null; differs: boolean }[];
+}
+
+export const fileUrl = (runId: string, path: string) =>
+  `/api/runs/${runId}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
+
 export interface AuthState { auth_enabled: boolean; user: string | null; tls: boolean }
 
 export const api = {
@@ -190,6 +205,17 @@ export const api = {
   importMarkers: (directory: string) =>
     request<{ imported: string[]; stale: string[]; ignored: string[] }>("POST", "/api/pdbs/import-markers", { directory }),
   runs: (limit = 100) => request<{ runs: Run[] }>("GET", `/api/runs?limit=${limit}`).then((r) => r.runs),
+  runsPage: (f: RunFilter) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return request<{ runs: Run[]; total: number }>("GET", `/api/runs?${qs}`);
+  },
+  artifacts: (id: string) =>
+    request<{ run_dir: string; files: Artifact[]; count: number; total_bytes: number }>("GET", `/api/runs/${id}/artifacts`),
+  leftovers: (id: string) => request<{ processes: Leftover[] }>("GET", `/api/runs/${id}/leftovers`),
+  killLeftovers: (id: string) =>
+    request<{ stopped: string[]; still_alive: string[] }>("POST", `/api/runs/${id}/kill-leftovers`),
+  compare: (a: string, b: string) => request<Comparison>("GET", `/api/runs/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
   activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),
   run: (id: string) => request<Run>("GET", `/api/runs/${id}`),
   items: (id: string) => request<{ items: RunItem[]; event_seq: number | null }>("GET", `/api/runs/${id}/items`),

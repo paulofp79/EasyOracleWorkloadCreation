@@ -286,3 +286,11 @@ details summary { cursor: pointer; color: var(--accent); margin: .25rem 0; }
 .login { width: min(24rem, 100%); display: flex; flex-direction: column; gap: .75rem; }
 .login h1 { margin: 0; }
 .user-menu { white-space: nowrap; }
+
+/* ---- M5: history, compare, artifacts ----------------------------------------------------------- */
+.filelist { list-style: none; padding: 0; margin: .25rem 0; columns: 2 22rem; }
+.filelist li { break-inside: avoid; padding: .1rem 0; }
+.btn.disabled { opacity: .5; pointer-events: none; }
+a.btn { text-decoration: none; display: inline-block; }
+.row-diff { background: var(--warn-bg); }
+.cmp-cell { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }

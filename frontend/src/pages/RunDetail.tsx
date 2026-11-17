@@ -1,7 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, ApiError, type ItemState, type RunItem } from "../api/client";
+import { api, ApiError, fileUrl, type ItemState, type RunItem } from "../api/client";
+import Artifacts from "../components/Artifacts";
+import Leftovers from "../components/Leftovers";
 import LogViewer from "../components/LogViewer";
 import TileGrid from "../components/TileGrid";
 import {
@@ -60,7 +62,9 @@ function useNow(active: boolean) {
   return now;
 }
 
-function Drawer({ runId, item, live, onClose }: { runId: string; item: RunItem; live: boolean; onClose: () => void }) {
+function Drawer({ runId, runType, item, live, onClose }: {
+  runId: string; runType: string; item: RunItem; live: boolean; onClose: () => void;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -91,6 +95,10 @@ function Drawer({ runId, item, live, onClose }: { runId: string; item: RunItem; 
           </div>
         ))}
       </dl>
+      {runType === "workload" && item.exit_code != null && (
+        <p className="small"><a href={fileUrl(runId, `${item.pdb}-results.xml`)} target="_blank" rel="noreferrer">
+          Swingbench result file ({item.pdb}-results.xml)</a></p>
+      )}
       <LogViewer runId={runId} pdb={item.pdb} live={live && !DONE.includes(item.state)} />
     </aside>
   );
@@ -98,7 +106,7 @@ function Drawer({ runId, item, live, onClose }: { runId: string; item: RunItem; 
 
 export default function RunDetail() {
   const { id = "" } = useParams();
-  const { run, items, order, runLog, connected, error } = useRunStream(id);
+  const { run, items, order, runLog, connected, error, reload } = useRunStream(id);
   const [view, setView] = useState<"grid" | "table">("grid");
   const [stateFilter, setStateFilter] = useState<ItemState | "all" | "problems">("all");
   const [text, setText] = useState("");
@@ -178,6 +186,7 @@ export default function RunDetail() {
         </div>
       </div>
       {run.message && <div className={`card ${["interrupted", "failed", "blocked"].includes(run.status) ? "error-box" : ""}`}>{run.message}</div>}
+      {run.status === "interrupted" && <Leftovers runId={id} onDone={() => void reload()} />}
       {!live && run.summary && (
         <div className="summary-line small">
           {Object.entries(SUMMARY_LABELS).filter(([k]) => typeof run.summary?.[k] === "number").map(([k, label]) => (
@@ -277,9 +286,10 @@ export default function RunDetail() {
         </button>
         {showLog && <pre className="log">{runLog.join("\n")}</pre>}
       </section>
+      <Artifacts runId={id} live={live} />
       <p className="small"><Link to="/runs">← All runs</Link></p>
 
-      {sel && <Drawer runId={id} item={sel} live={live} onClose={() => setSelected(null)} />}
+      {sel && <Drawer runId={id} runType={run.type} item={sel} live={live} onClose={() => setSelected(null)} />}
     </div>
   );
 }

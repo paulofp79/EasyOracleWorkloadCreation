@@ -5,6 +5,7 @@ import { api, AUTH_REQUIRED } from "./api/client";
 import Login from "./pages/Login";
 import SysSession from "./components/SysSession";
 import Check from "./pages/Check";
+import Compare from "./pages/Compare";
 import CreatePdbs from "./pages/CreatePdbs";
 import DropPdbs from "./pages/DropPdbs";
 import LoadSoe from "./pages/LoadSoe";
@@ -154,6 +155,7 @@ function Shell({ user }: { user: string | null }) {
             <Route path="/load" element={<LoadSoe />} />
             <Route path="/workload" element={<Workload />} />
             <Route path="/runs" element={<Runs />} />
+            <Route path="/runs/compare" element={<Compare />} />
             <Route path="/runs/:id" element={<RunDetail key={location.pathname} />} />
             {NAV.filter((n) => n.milestone).map((n) => (
               <Route key={n.to} path={n.to} element={<Placeholder title={n.label} milestone={n.milestone!} />} />

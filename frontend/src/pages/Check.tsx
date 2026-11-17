@@ -53,12 +53,12 @@ export default function Check() {
     } else setFormError((e as Error).message);
   };
   const planM = useMutation({
-    mutationFn: () => api.plan("check", params() as never),
+    mutationFn: () => api.plan("check", params()),
     onSuccess: (r) => { setPlan(r.plan); setServerErrors({}); setFormError(""); },
     onError,
   });
   const startM = useMutation({
-    mutationFn: () => api.startRun("check", params() as never, { soe_password: password }),
+    mutationFn: () => api.startRun("check", params(), { soe_password: password }),
     onSuccess: (r) => { setPassword(""); navigate(`/runs/${r.run_id}`); },
     onError,
   });
@@ -114,8 +114,8 @@ export default function Check() {
               First connect string <span className="mono">{plan.example_connect}</span>
             </p>
             {plan.warnings.map((w) => <p key={w} className="text-warn">! {w}</p>)}
-            {plan.missing.length > 0 && <p className="mono small">missing: {plan.missing.slice(0, 20).join(" ")}{plan.missing.length > 20 ? " …" : ""}</p>}
-            {plan.not_open.length > 0 && <p className="mono small">not open: {plan.not_open.slice(0, 20).join(" ")}{plan.not_open.length > 20 ? " …" : ""}</p>}
+            {(plan.missing?.length ?? 0) > 0 && <p className="mono small">missing: {plan.missing!.slice(0, 20).join(" ")}{plan.missing!.length > 20 ? " …" : ""}</p>}
+            {(plan.not_open?.length ?? 0) > 0 && <p className="mono small">not open: {plan.not_open!.slice(0, 20).join(" ")}{plan.not_open!.length > 20 ? " …" : ""}</p>}
             <div className="field">
               <label>Equivalent command</label>
               <pre className="cmd">{plan.equivalent_command}</pre>

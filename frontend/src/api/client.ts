@@ -120,10 +120,14 @@ export interface Plan {
   type: string;
   pdbs: string[];
   count: number;
-  missing: string[];
-  not_open: string[];
+  missing?: string[];
+  not_open?: string[];
+  existing?: { name: string; con_uid: string; rw_instances: number }[];
+  drop_token?: string | null;
+  to_create?: number;
+  sql_preview?: string;
   warnings: string[];
-  example_connect: string;
+  example_connect?: string;
   equivalent_command: string;
 }
 
@@ -140,9 +144,9 @@ export const api = {
   envCheck: (profileId?: number) =>
     request<EnvCheck>("GET", profileId ? `/api/env-check?profile_id=${profileId}` : "/api/env-check"),
   pdbs: (prefix?: string) => request<Inventory>("GET", prefix ? `/api/pdbs?prefix=${encodeURIComponent(prefix)}` : "/api/pdbs"),
-  plan: (type: string, params: Params) =>
+  plan: (type: string, params: Record<string, unknown>) =>
     request<{ plan: Plan; params: Params }>("POST", "/api/runs", { type, params, dry_run: true }),
-  startRun: (type: string, params: Params, secrets: Record<string, string>) =>
+  startRun: (type: string, params: Record<string, unknown>, secrets: Record<string, string>) =>
     request<{ run_id: string }>("POST", "/api/runs", { type, params, secrets }),
   runs: (limit = 100) => request<{ runs: Run[] }>("GET", `/api/runs?limit=${limit}`).then((r) => r.runs),
   activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),

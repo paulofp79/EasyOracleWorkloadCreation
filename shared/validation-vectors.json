@@ -299,5 +299,44 @@
         "PDB PP_001"
       ]
     ]
+  },
+  "existing_action": {
+    "valid": [
+      "drop",
+      "skip",
+      "abort"
+    ],
+    "invalid": [
+      "DROP",
+      "",
+      "delete",
+      null,
+      1
+    ]
+  },
+  "confirm_token": {
+    "valid": [
+      "0123456789abcdef",
+      "ffffffffffffffff"
+    ],
+    "invalid": [
+      "",
+      "0123456789ABCDEF",
+      "0123456789abcde",
+      "0123456789abcdef0",
+      123
+    ]
+  },
+  "confirm_delete": {
+    "valid": [
+      "DELETE"
+    ],
+    "invalid": [
+      "delete",
+      "DELETE ",
+      "yes",
+      "",
+      null
+    ]
   }
 }

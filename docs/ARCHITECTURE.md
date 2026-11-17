@@ -85,7 +85,7 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 
 1. Create: existing-PDB check uses the prefix query (PC §4.4), not the script's `v$pdbs … IN (…)` list (gotcha 3).
 2. Create SQL text: generated exactly as the script lays it out (multi-line `CREATE …`/`ADMINISTER …`); golden tests pin it. Semantically identical to PC §4.2.
-3. Drop: same PL/SQL block as the script (it uses `gv$pdbs` for both RAC and non-RAC), but one sqlplus per PDB instead of one batch file, so progress is per PDB and a failure names the PDB. Still stops on first failure.
+3. Drop: same PL/SQL block as the script (it uses `gv$pdbs` for both RAC and non-RAC), but one sqlplus per PDB instead of one batch file, so progress is per PDB and a failure names the PDB. Still stops on first failure. Every drop needs `confirm_text = DELETE` plus a token the plan computed from the exact `name:con_uid` list; the token is re-checked against the live CDB at start, so a list that changed in between blocks the run.
 4. Load cancel adds the KILL-after-2 s step (script only sent TERM), per PC §4.8.
 5. oewizard path must be absolute in profiles (script default `./oewizard` is relative to the caller's cwd); relative values are resolved against the Swingbench `bin` dir and shown resolved.
 6. Truncation as in scripts: check reason 200 chars, first error line 150 chars; timeout detection also maps exit codes 124/137 for parity.

@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api/client";
 import Check from "./pages/Check";
+import CreatePdbs from "./pages/CreatePdbs";
+import DropPdbs from "./pages/DropPdbs";
 import Dashboard from "./pages/Dashboard";
 import Environment from "./pages/Environment";
 import Placeholder from "./pages/Placeholder";
@@ -14,7 +16,7 @@ import Runs from "./pages/Runs";
 const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/", label: "Dashboard" },
   { to: "/pdbs", label: "PDBs" },
-  { to: "/create", label: "Create PDBs", milestone: "M2" },
+  { to: "/create", label: "Create PDBs" },
   { to: "/load", label: "Load SOE", milestone: "M3" },
   { to: "/check", label: "Check connections" },
   { to: "/workload", label: "Run workload", milestone: "M4" },
@@ -114,6 +116,8 @@ export default function App() {
             <Route path="/environment" element={<Environment />} />
             <Route path="/pdbs" element={<Pdbs />} />
             <Route path="/check" element={<Check />} />
+            <Route path="/create" element={<CreatePdbs />} />
+            <Route path="/drop" element={<DropPdbs />} />
             <Route path="/runs" element={<Runs />} />
             <Route path="/runs/:id" element={<RunDetail key={location.pathname} />} />
             {NAV.filter((n) => n.milestone).map((n) => (

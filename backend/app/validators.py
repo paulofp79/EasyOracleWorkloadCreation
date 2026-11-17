@@ -212,8 +212,29 @@ def pdb_names(v: Any) -> list[str]:
     return out
 
 
+def existing_action(v: Any) -> str:
+    if v not in ("drop", "skip", "abort"):
+        raise RuleError("must be drop, skip or abort")
+    return v
+
+
+def confirm_token(v: Any) -> str:
+    if not isinstance(v, str) or not re.fullmatch(r"[0-9a-f]{16}", v):
+        raise RuleError("is not a valid confirmation token; run the plan again")
+    return v
+
+
+def confirm_delete(v: Any) -> str:
+    if v != "DELETE":
+        raise RuleError("type DELETE to confirm")
+    return v
+
+
 RULES: dict[str, Callable[[Any], Any]] = {
     "pdb_names": pdb_names,
+    "existing_action": existing_action,
+    "confirm_token": confirm_token,
+    "confirm_delete": confirm_delete,
     "prefix": prefix, "pdb_number": pdb_number, "positive_int": positive_int,
     "scan_host": scan_host, "scan_port": scan_port, "service_suffix": service_suffix,
     "scale": scale, "tablespace": tablespace, "runtime": runtime, "disable_txns": disable_txns,

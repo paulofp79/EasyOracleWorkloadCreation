@@ -18,6 +18,7 @@ from typing import Any
 
 from ..config import Settings
 from ..db import Database, utcnow
+from ..ops.base import PlanError
 from ..redact import Redactor
 from .events import EventBus
 from .runner import ProcessRunner
@@ -63,8 +64,9 @@ def write_private(path: Path, text: str) -> None:
 
 
 class RunContext:
-    def __init__(self, manager: "RunManager", run: dict[str, Any], pdbs: list[str], op):
+    def __init__(self, manager: "RunManager", run: dict[str, Any], pdbs: list[str], op, actor: str = "local"):
         self.manager = manager
+        self.manager_actor = actor
         self.db: Database = manager.db
         self.settings: Settings = manager.settings
         self.run_id: str = run["id"]
@@ -169,7 +171,7 @@ class RunManager:
                    "params": op.params, "run_dir": str(run_dir), "retry_of": retry_of, "created_at": now,
                    "started_at": now}
             self.db.insert_run(run, pdbs)
-            ctx = RunContext(self, run, pdbs, op)
+            ctx = RunContext(self, run, pdbs, op, actor)
             self.active = ctx
             self.contexts[run_id] = ctx
             self.buses[run_id] = ctx.bus
@@ -189,6 +191,8 @@ class RunManager:
             status, summary = await ctx.op.execute(ctx)
         except asyncio.CancelledError:
             status, message = "cancelled", "The run task was cancelled."
+        except PlanError as exc:                 # e.g. gv$pdbs could not be read: show the database's reason
+            status, message = "failed", str(exc)
         except Exception as exc:  # noqa: BLE001 - report, never crash the server
             ref = uuid.uuid4().hex[:8]
             log.exception("run %s failed (ref %s)", ctx.run_id, ref)

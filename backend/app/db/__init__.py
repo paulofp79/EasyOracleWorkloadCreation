@@ -198,6 +198,9 @@ class Database:
                                  (prefix,)).fetchall()
         return {r["pdb"]: dict(r) for r in rows}
 
+    def delete_soe_marker(self, pdb: str) -> None:
+        self.conn.execute("DELETE FROM soe_markers WHERE pdb = ?", (pdb,))
+
     def soe_markers(self, prefix: str) -> dict[str, dict[str, Any]]:
         rows = self.conn.execute("SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
                                  (prefix,)).fetchall()

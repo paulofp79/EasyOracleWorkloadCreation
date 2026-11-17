@@ -75,3 +75,76 @@ def test_parse_inventory():
 def test_parse_preflight():
     assert parse_preflight("PDBPP_001|123|2\n bad line\nPDBPP_002 | 456 | 0\n") == \
         {"PDBPP_001": ("123", 2), "PDBPP_002": ("456", 0)}
+
+
+# ---- create / drop (create_pdbs.sh) ----------------------------------------------------------------
+import re  # noqa: E402
+
+import pytest  # noqa: E402
+
+from app.sqlbuild import create_pdb_sql, drop_pdb_block, drop_pdb_sql  # noqa: E402
+
+CREATE_SH = (REF / "create_pdbs.sh").read_text()
+
+
+def script_assignment(name: str, branch: int) -> str:
+    """Value of open_sql/save_sql in the RAC (0) or non-RAC (1) branch, as bash expands it."""
+    vals = re.findall(rf'^\s*{name}="(.*)"$', CREATE_SH, re.M)
+    return vals[branch]
+
+
+def script_tde() -> str:
+    m = re.search(r'tde_sql="(ALTER SESSION.*?CURRENT;)"', CREATE_SH, re.S)
+    return m.group(1).replace('\\"', '"')
+
+
+def nth_heredoc(script_text: str, opener: str, n: int) -> str:
+    lines = script_text.splitlines()
+    starts = [i for i, ln in enumerate(lines) if opener in ln and ln.rstrip().endswith("<<SQL")]
+    body = []
+    for ln in lines[starts[n] + 1:]:
+        if ln == "SQL":
+            break
+        body.append(ln)
+    return "\n".join(body).replace("\\$", "$") + "\n"
+
+
+def expected_create(pdb: str, admin: str, rac: bool, wallet: str | None) -> str:
+    body = nth_heredoc(CREATE_SH, 'sqlplus -L -s / as sysdba >"$sql_log"', 0)
+    branch = 0 if rac else 1
+    tde = script_tde().replace("${TDE_WALLET_PASSWORD}", wallet) if wallet is not None else ""
+    return (body.replace("${open_sql}", script_assignment("open_sql", branch))
+                .replace("${save_sql}", script_assignment("save_sql", branch))
+                .replace("${tde_sql}", tde)
+                .replace("${PDB_ADMIN_PASSWORD}", admin)
+                .replace("${pdb}", pdb))
+
+
+@pytest.mark.parametrize("rac", [True, False])
+@pytest.mark.parametrize("wallet", [None, "W@llet-1"])
+def test_create_sql_matches_create_pdbs(rac, wallet):
+    assert create_pdb_sql("PDBPP_007", "Adm1n'pw", rac, wallet) == expected_create("PDBPP_007", "Adm1n'pw", rac, wallet)
+
+
+def test_wallet_off_has_no_tde_statements():
+    sql = create_pdb_sql("PDBPP_001", "x", True, None)
+    assert "ADMINISTER" not in sql and "SET CONTAINER" not in sql and "KEYSTORE" not in sql
+
+
+def test_rac_vs_single_instance_open():
+    assert "OPEN INSTANCES=ALL;" in create_pdb_sql("P_001", "x", True, None)
+    si = create_pdb_sql("P_001", "x", False, None)
+    assert "ALTER PLUGGABLE DATABASE P_001 OPEN;" in si and "SAVE STATE;" in si and "INSTANCES" not in si
+
+
+@pytest.mark.parametrize("rac,n", [(True, 0), (False, 1)])
+def test_drop_block_matches_create_pdbs(rac, n):
+    expected = nth_heredoc(CREATE_SH, "cat <<SQL", n).replace("${pdb}", "PDBPP_042")
+    expected += "DROP PLUGGABLE DATABASE PDBPP_042 INCLUDING DATAFILES;\n\n"
+    assert drop_pdb_block("PDBPP_042", rac) == expected
+
+
+def test_drop_sql_has_script_header_and_exit():
+    sql = drop_pdb_sql("PDBPP_042", True)
+    assert sql.startswith("WHENEVER OSERROR EXIT FAILURE\nWHENEVER SQLERROR EXIT SQL.SQLCODE\nDECLARE")
+    assert sql.endswith("INCLUDING DATAFILES;\n\nEXIT\n")

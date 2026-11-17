@@ -58,17 +58,18 @@ class Operation:
         except v.ValidationError as exc:
             errors.update(exc.errors)
         secrets: dict[str, str] = {}
+        spec = cls.secret_spec(params)          # from whatever parameters are valid so far
         if need_secrets:
             try:
-                secrets = v.validate({k: raw_secrets.get(k) for k in cls.SECRETS}, cls.SECRETS)
+                secrets = v.validate({k: raw_secrets[k] for k in spec if k in raw_secrets}, spec)
             except v.ValidationError as exc:
                 errors.update({f"secrets.{k}": m for k, m in exc.errors.items()})
-        unknown = set(raw_secrets) - set(cls.SECRETS)
-        for k in unknown:
-            errors[f"secrets.{k}"] = "unknown secret"
+        for k in raw_secrets:
+            if k not in cls.SECRETS:
+                errors[f"secrets.{k}"] = "unknown secret"
         if not errors:
             try:
-                cls.check(params)
+                cls.check(params, final=need_secrets)
             except v.ValidationError as exc:
                 errors.update(exc.errors)
         if errors:
@@ -76,8 +77,13 @@ class Operation:
         return cls(settings, db, params, secrets, profile["id"] if profile else None)
 
     @classmethod
-    def check(cls, params: dict[str, Any]) -> None:
-        """Cross-field validation hook."""
+    def secret_spec(cls, params: dict[str, Any]) -> dict[str, str]:
+        """Secrets needed for these parameters (e.g. the wallet password only when TDE is on)."""
+        return cls.SECRETS
+
+    @classmethod
+    def check(cls, params: dict[str, Any], final: bool = True) -> None:
+        """Cross-field validation hook. final=False for a plan / dry run."""
         if "pdbs" in params:
             prefix = params["prefix"] + "_"
             bad = [p for p in params["pdbs"] if not p.startswith(prefix)]

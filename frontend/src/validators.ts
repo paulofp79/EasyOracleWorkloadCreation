@@ -30,6 +30,9 @@ const positiveInt: Rule = (v) => {
 const PDB_NAME = /^[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}$/;
 
 export const RULES: Record<string, Rule> = {
+  existing_action: (v) => (v === "drop" || v === "skip" || v === "abort" ? null : "must be drop, skip or abort"),
+  confirm_token: (v) => (typeof v === "string" && /^[0-9a-f]{16}$/.test(v) ? null : "is not a valid confirmation token; run the plan again"),
+  confirm_delete: (v) => (v === "DELETE" ? null : "type DELETE to confirm"),
   pdb_names: (v) => {
     if (!Array.isArray(v) || v.length === 0) return "must be a non-empty list of PDB names";
     if (v.length > 999) return "at most 999 PDBs";

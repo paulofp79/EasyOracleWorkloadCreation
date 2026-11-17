@@ -251,3 +251,14 @@ input.num { width: 4.5rem; }
 .mode-rw { color: var(--pass); background: var(--pass-bg); }
 .mode-other { color: var(--warn); background: var(--warn-bg); font-weight: 700; }
 .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- M2: destructive confirmation ------------------------------------------------------------ */
+.danger-box { border: 1px solid var(--fail); background: var(--fail-bg); border-radius: 8px; padding: .75rem;
+  margin: .5rem 0 .75rem; display: flex; flex-direction: column; gap: .5rem; }
+.danger-box p { margin: 0; color: var(--fail); }
+.namelist { display: flex; flex-wrap: wrap; gap: .25rem .6rem; max-height: 7.5rem; overflow-y: auto; padding: .4rem;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; margin-bottom: .5rem; }
+.radio-row { display: flex; flex-direction: column; gap: .35rem; }
+.radio-row label { display: flex; gap: .5rem; align-items: flex-start; }
+.btn-danger-solid { background: var(--fail); border-color: var(--fail); color: #fff; font-weight: 600; }
+details summary { cursor: pointer; color: var(--accent); margin: .25rem 0; }

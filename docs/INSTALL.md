@@ -16,11 +16,13 @@ Two ways to install:
 ```bash
 # Oracle Linux 8 (8.8 or later) and Oracle Linux 9 (9.2 or later)
 dnf install -y git python3.11 python3.11-pip
-# Node.js is only needed to build the web UI (once per update); skip it if you build elsewhere
-dnf module install -y nodejs:20
 ```
 
-Check: `python3.11 --version` (3.11.x) and `node --version` (v20 or later).
+Check: `python3.11 --version` (3.11.x). Node.js is **not** needed: the built web UI is part of the
+repository (`frontend/dist`).
+
+If dnf stops with "Failed to download metadata for repo '<name>'" (an internal repository that needs
+credentials), skip that repository for this command: `dnf --disablerepo=<name> install -y git python3.11 python3.11-pip`.
 
 Swingbench must already be installed for `oracle` (with its Java), e.g. `/home/oracle/swingbench/bin/charbench`.
 
@@ -48,14 +50,11 @@ venv/bin/pip install --upgrade pip
 venv/bin/pip install -e ./backend
 ```
 
-### 4. Build the web UI
+### 4. Web UI
 
-```bash
-cd ~/pdb-orchestrator/frontend
-npm ci
-npm run build          # creates frontend/dist, served by the backend
-cd ..
-```
+Nothing to do: the built UI is committed in `frontend/dist` and served by the backend. Rebuilding
+it (`cd frontend && npm ci && npm run build`, Node.js 20+) is only needed if you change the UI source,
+and needs access to the npm registry.
 
 ### 5. Oracle environment
 
@@ -110,18 +109,17 @@ runs the whole UI against the stub tools in `tools/stubs` (separate database und
 
 ## B. Offline install (server without internet)
 
-On a build machine with internet, `python3.11`, Node.js 20+ and the same CPU architecture (x86_64):
+On a build machine with internet, `python3.11` and the same CPU architecture (x86_64):
 
 ```bash
 git clone -b claude/gracious-ptolemy-uu1i4i https://github.com/paulofp79/EasyOracleWorkloadCreation.git pdb-orchestrator
 cd pdb-orchestrator
-(cd frontend && npm ci && npm run build)
 scripts/build-wheels.sh                    # dist/wheels/*.whl + dist/requirements.lock
 cd .. && tar czf pdb-orchestrator.tgz --exclude=node_modules --exclude=.git pdb-orchestrator
 scp pdb-orchestrator.tgz oracle@<db-host>:
 ```
 
-On the server (as root: `dnf install -y python3.11`; Node.js and git are not needed), then as `oracle`:
+On the server (as root: `dnf install -y python3.11`; git is not needed), then as `oracle`:
 
 ```bash
 tar xzf pdb-orchestrator.tgz && cd pdb-orchestrator
@@ -140,7 +138,6 @@ ORCH_HOME=$PWD venv/bin/python -m app
 cd ~/pdb-orchestrator
 git pull
 venv/bin/pip install -e ./backend
-(cd frontend && npm ci && npm run build)
 # stop the running app (no run in progress), start it again as in step 6
 ```
 
@@ -156,6 +153,8 @@ The SQLite database is migrated automatically on start; profiles and run history
 * **Passwords** are entered per run, never stored, passed to sqlplus on stdin and masked in all logs.
   oewizard and charbench only accept them on the command line, so they are visible in `ps` while those
   run.
+* **If PyPI is blocked** like the npm registry can be, either point pip at your internal mirror
+  (`venv/bin/pip install --index-url https://<mirror>/simple -e ./backend`) or use the offline bundle (B).
 * **Do not run it as root**: it must be the OS user that owns the Oracle and Swingbench installation.
 * **Disk**: each workload run writes one charbench log and one results file per PDB; check free space in
   the log directory (shown by the environment check).

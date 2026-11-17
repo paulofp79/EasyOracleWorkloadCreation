@@ -4,8 +4,7 @@ __pycache__/
 .pytest_cache/
 var/
 node_modules/
-frontend/dist/
-dist/
+/dist/
 *.egg-info/
 *.tsbuildinfo
 build/

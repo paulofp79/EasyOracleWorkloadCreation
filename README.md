@@ -16,7 +16,7 @@ everything `reference/*.sh` does, from a browser, with live monitoring and histo
 
 ```bash
 make venv          # python3.11 venv in .venv with backend + test deps
-make frontend      # npm ci + build the UI into frontend/dist (needs Node 20+)
+# frontend/dist (the built UI) is committed; `make frontend` rebuilds it after UI changes (Node 20+)
 make sim           # http://127.0.0.1:8080
 ```
 

@@ -148,3 +148,36 @@ def test_drop_sql_has_script_header_and_exit():
     sql = drop_pdb_sql("PDBPP_042", True)
     assert sql.startswith("WHENEVER OSERROR EXIT FAILURE\nWHENEVER SQLERROR EXIT SQL.SQLCODE\nDECLARE")
     assert sql.endswith("INCLUDING DATAFILES;\n\nEXIT\n")
+
+
+# ---- load SOE (create_swingbench.sh) -------------------------------------------------------------
+import shlex  # noqa: E402
+
+from app.cmdbuild import display, oewizard_argv  # noqa: E402
+from app.sqlbuild import soe_setup_sql  # noqa: E402
+
+LOAD_SH = (REF / "create_swingbench.sh").read_text()
+
+
+def test_soe_setup_matches_create_swingbench():
+    expected = nth_heredoc(LOAD_SH, 'sqlplus -L -s / as sysdba >"$sql_log"', 0)
+    expected = expected.replace("${pdb}", "PDBPP_222").replace("${SOE_PASSWORD}", "s0e'pw")
+    assert soe_setup_sql("PDBPP_222", "s0e'pw") == expected
+
+
+def test_oewizard_argv_matches_create_swingbench():
+    m = re.search(r'if ! "\$OEWIZARD" \\\n(.*?)>"\$wizard_log"', LOAD_SH, re.S)
+    text = m.group(1).replace("\\\n", " ")
+    subst = {"$service": "//scan:1521/pdbpp_222", "$SOE_PASSWORD": "pw1", "$SCALE": "0.1", "$THREADS": "16",
+             "$DBA_PASSWORD": "pw2", "$TABLESPACE": "SOETBS"}
+    expected = ["/sb/bin/oewizard"]
+    for tok in shlex.split(text):
+        expected.append(subst.get(tok, tok))
+    got = oewizard_argv("/sb/bin/oewizard", "//scan:1521/pdbpp_222", "pw1", "0.1", 16, "pw2", "SOETBS")
+    assert got == expected
+
+
+def test_display_masks_both_passwords():
+    shown = display(oewizard_argv("/x/oewizard", "//h:1/s", "pw1", "1", 4, "pw2", "T"))
+    assert "pw1" not in shown and "pw2" not in shown and shown.count("'********'") == 2
+    assert "-dba 'sys as sysdba'" in shown

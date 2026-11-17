@@ -13,7 +13,7 @@ from .. import validators as v
 from ..engine.events import sse
 from ..engine.runs import Conflict, RunManager
 from ..ops.base import PlanError
-from ..ops.registry import OPERATIONS
+from ..ops.registry import OPERATIONS, RETRYABLE
 from .deps import actor, db, settings
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -29,6 +29,9 @@ class RunIn(BaseModel):
     secrets: dict[str, Any] = {}
     dry_run: bool = False
     profile_id: int | None = None
+    retry_of: str | None = None
+
+RETRY_STATES = ("failed", "not_started", "cancelled")
 
 
 def manager(request: Request) -> RunManager:
@@ -48,17 +51,33 @@ async def create_run(body: RunIn, request: Request):
     if op_cls is None:
         raise v.ValidationError({"type": f"must be one of {', '.join(sorted(OPERATIONS))}"})
     d = db(request)
-    profile = d.get_profile(body.profile_id) if body.profile_id is not None else d.active_profile()
-    if body.profile_id is not None and profile is None:
-        raise v.ValidationError({"profile_id": "profile not found"})
-    op = op_cls.from_request(settings(request), d, body.params, body.secrets, profile, need_secrets=not body.dry_run)
+    params = body.params
+    if body.retry_of is not None:
+        # Same parameters as the original run, limited to the PDBs that did not finish OK.
+        old = d.get_run(body.retry_of)
+        if old is None or old["type"] != body.type:
+            raise v.ValidationError({"retry_of": "no such run of this type"})
+        if body.type not in RETRYABLE:
+            raise v.ValidationError({"retry_of": f"{body.type} runs cannot be retried"})
+        if old["status"] == "running":
+            raise v.ValidationError({"retry_of": "that run is still in progress"})
+        retry = [it["pdb"] for it in d.get_items(body.retry_of) if it["state"] in RETRY_STATES]
+        if not retry:
+            raise v.ValidationError({"retry_of": "nothing to retry: every PDB finished OK or was skipped"})
+        params = {**old["params"], "pdbs": retry}
+        profile = None
+    else:
+        profile = d.get_profile(body.profile_id) if body.profile_id is not None else d.active_profile()
+        if body.profile_id is not None and profile is None:
+            raise v.ValidationError({"profile_id": "profile not found"})
+    op = op_cls.from_request(settings(request), d, params, body.secrets, profile, need_secrets=not body.dry_run)
     if body.dry_run:
         try:
             return {"plan": await op.plan(), "params": op.params}
         except PlanError as exc:
             raise HTTPException(502, str(exc)) from exc
     try:
-        run_id = await manager(request).start(op, actor(request))
+        run_id = await manager(request).start(op, actor(request), retry_of=body.retry_of)
     except Conflict as exc:
         return JSONResponse({"error": str(exc), "run_id": exc.run_id}, status_code=409)
     return JSONResponse({"run_id": run_id}, status_code=201)

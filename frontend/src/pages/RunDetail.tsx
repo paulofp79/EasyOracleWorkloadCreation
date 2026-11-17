@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { api, type ItemState, type RunItem } from "../api/client";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { api, ApiError, type ItemState, type RunItem } from "../api/client";
 import LogViewer from "../components/LogViewer";
 import TileGrid from "../components/TileGrid";
 import {
@@ -10,6 +10,41 @@ import {
 import { useRunStream } from "../hooks/useRunStream";
 
 const DONE: ItemState[] = ["ok", "failed", "skipped", "not_started", "cancelled"];
+const RETRY_SECRETS: Record<string, [string, string][]> = {
+  check: [["soe_password", "SOE password"]],
+  load: [["soe_password", "SOE password"], ["sys_password", "SYS password"]],
+};
+const SUMMARY_LABELS: Record<string, string> = {
+  loaded: "loaded", created: "created", dropped: "dropped", skipped: "skipped", existing: "existed before",
+  checked: "checked", ok: "OK", failed: "failed", not_started: "not started", peak_running: "peak concurrency",
+  elapsed_s: "elapsed (s)",
+};
+
+function RetryBox({ run, count }: { run: { id: string; type: string }; count: number }) {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [secrets, setSecrets] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const fields = RETRY_SECRETS[run.type] ?? [];
+  const retry = useMutation({
+    mutationFn: () => api.retryRun(run.type, run.id, secrets),
+    onSuccess: (r) => navigate(`/runs/${r.run_id}`),
+    onError: (e) => setError(e instanceof ApiError && Object.keys(e.errors).length ? Object.values(e.errors).join("; ") : (e as Error).message),
+  });
+  if (!open) return <button className="btn btn-primary" onClick={() => setOpen(true)}>Retry failed ({count})</button>;
+  return (
+    <form className="retrybox" onSubmit={(e) => { e.preventDefault(); retry.mutate(); }}>
+      <span className="small">Retry the {count} failed / not started PDB(s) with the same settings.</span>
+      {fields.map(([k, label]) => (
+        <input key={k} type="password" placeholder={label} aria-label={label} autoComplete="new-password"
+               value={secrets[k] ?? ""} onChange={(e) => setSecrets({ ...secrets, [k]: e.target.value })} />
+      ))}
+      <button className="btn btn-primary" type="submit" disabled={fields.some(([k]) => !secrets[k]) || retry.isPending}>Start retry</button>
+      <button className="btn" type="button" onClick={() => setOpen(false)}>Cancel</button>
+      {error && <span className="text-fail small">{error}</span>}
+    </form>
+  );
+}
 
 function useNow(active: boolean) {
   const [now, setNow] = useState(Date.now());
@@ -92,6 +127,7 @@ export default function RunDetail() {
   const failed = counts.failed ?? 0;
   const elapsed = run.started_at ? ((run.ended_at ? Date.parse(run.ended_at) : now) - Date.parse(run.started_at)) / 1000 : null;
   const sel = selected ? items.get(selected) : undefined;
+  const retryCount = (counts.failed ?? 0) + (counts.not_started ?? 0) + (counts.cancelled ?? 0);
   const pct = total ? (done / total) * 100 : 0;
 
   return (
@@ -119,7 +155,12 @@ export default function RunDetail() {
         <RunBadge status={run.status} />
         <span>{completed} / {total} completed</span>
         <span className={failed ? "text-fail" : "muted"}>{failed} failed</span>
-        {stopped > 0 && <span className="text-warn">{counts.cancelled ?? 0} cancelled · {counts.not_started ?? 0} not started</span>}
+        {stopped > 0 && (
+          <span className="text-warn">
+            {[counts.cancelled ? `${counts.cancelled} cancelled` : "", counts.not_started ? `${counts.not_started} not started` : ""]
+              .filter(Boolean).join(" · ")}
+          </span>
+        )}
         <span className="muted">elapsed {fmtDuration(elapsed)}</span>
         <span className="muted">started {fmtTime(run.started_at)}</span>
         <span className="muted mono small" title="Run directory">{run.run_dir}</span>
@@ -130,7 +171,16 @@ export default function RunDetail() {
           <div className="progress-other" style={{ width: `${Math.max(0, pct - (total ? (((counts.ok ?? 0) + failed) / total) * 100 : 0))}%` }} />
         </div>
       </div>
-      {run.message && <div className={`card ${run.status === "interrupted" || run.status === "failed" ? "error-box" : ""}`}>{run.message}</div>}
+      {run.message && <div className={`card ${["interrupted", "failed", "blocked"].includes(run.status) ? "error-box" : ""}`}>{run.message}</div>}
+      {!live && run.summary && (
+        <div className="summary-line small">
+          {Object.entries(SUMMARY_LABELS).filter(([k]) => typeof run.summary?.[k] === "number").map(([k, label]) => (
+            <span key={k}><strong>{run.summary![k]}</strong> {label}</span>
+          ))}
+          {run.retry_of && <span>retry of <Link className="mono" to={`/runs/${run.retry_of}`}>{run.retry_of}</Link></span>}
+        </div>
+      )}
+      {!live && RETRY_SECRETS[run.type] && retryCount > 0 && <div className="actions" style={{ marginBottom: ".75rem" }}><RetryBox run={run} count={retryCount} /></div>}
 
       <div className="toolbar">
         <div className="counters">

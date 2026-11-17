@@ -262,3 +262,9 @@ input.num { width: 4.5rem; }
 .radio-row label { display: flex; gap: .5rem; align-items: flex-start; }
 .btn-danger-solid { background: var(--fail); border-color: var(--fail); color: #fff; font-weight: 600; }
 details summary { cursor: pointer; color: var(--accent); margin: .25rem 0; }
+
+/* ---- M3 ---------------------------------------------------------------------------------------- */
+.summary-line { display: flex; flex-wrap: wrap; gap: .25rem 1.1rem; margin: 0 0 .75rem; color: var(--muted); }
+.summary-line strong { color: var(--text); }
+.retrybox { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; padding: .5rem .75rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--panel); }

@@ -198,6 +198,14 @@ class Database:
                                  (prefix,)).fetchall()
         return {r["pdb"]: dict(r) for r in rows}
 
+    def set_soe_marker(self, pdb: str, con_uid: str, run_id: str | None, scale: str | None,
+                       tablespace: str | None, loaded_at: str | None = None) -> None:
+        self.conn.execute(
+            "INSERT INTO soe_markers(pdb, con_uid, loaded_at, run_id, scale, tablespace) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(pdb) DO UPDATE SET con_uid = excluded.con_uid, loaded_at = excluded.loaded_at, "
+            "run_id = excluded.run_id, scale = excluded.scale, tablespace = excluded.tablespace",
+            (pdb, con_uid, loaded_at or utcnow(), run_id, scale, tablespace))
+
     def delete_soe_marker(self, pdb: str) -> None:
         self.conn.execute("DELETE FROM soe_markers WHERE pdb = ?", (pdb,))
 

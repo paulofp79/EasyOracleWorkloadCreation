@@ -90,6 +90,7 @@ export interface Run {
   ended_at: string | null;
   summary: Record<string, any> | null;
   message: string | null;
+  retry_of: string | null;
   counts: Partial<Record<ItemState, number>>;
   total: number;
   event_seq: number | null;
@@ -126,6 +127,10 @@ export interface Plan {
   drop_token?: string | null;
   to_create?: number;
   sql_preview?: string;
+  blocked?: boolean;
+  already_loaded?: string[];
+  to_load?: string[];
+  command_preview?: string;
   warnings: string[];
   example_connect?: string;
   equivalent_command: string;
@@ -148,6 +153,10 @@ export const api = {
     request<{ plan: Plan; params: Params }>("POST", "/api/runs", { type, params, dry_run: true }),
   startRun: (type: string, params: Record<string, unknown>, secrets: Record<string, string>) =>
     request<{ run_id: string }>("POST", "/api/runs", { type, params, secrets }),
+  retryRun: (type: string, runId: string, secrets: Record<string, string>) =>
+    request<{ run_id: string }>("POST", "/api/runs", { type, params: {}, secrets, retry_of: runId }),
+  importMarkers: (directory: string) =>
+    request<{ imported: string[]; stale: string[]; ignored: string[] }>("POST", "/api/pdbs/import-markers", { directory }),
   runs: (limit = 100) => request<{ runs: Run[] }>("GET", `/api/runs?limit=${limit}`).then((r) => r.runs),
   activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),
   run: (id: string) => request<Run>("GET", `/api/runs/${id}`),

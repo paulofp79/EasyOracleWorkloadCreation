@@ -5,6 +5,7 @@ import { api } from "./api/client";
 import Check from "./pages/Check";
 import CreatePdbs from "./pages/CreatePdbs";
 import DropPdbs from "./pages/DropPdbs";
+import LoadSoe from "./pages/LoadSoe";
 import Dashboard from "./pages/Dashboard";
 import Environment from "./pages/Environment";
 import Placeholder from "./pages/Placeholder";
@@ -17,7 +18,7 @@ const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/", label: "Dashboard" },
   { to: "/pdbs", label: "PDBs" },
   { to: "/create", label: "Create PDBs" },
-  { to: "/load", label: "Load SOE", milestone: "M3" },
+  { to: "/load", label: "Load SOE" },
   { to: "/check", label: "Check connections" },
   { to: "/workload", label: "Run workload", milestone: "M4" },
   { to: "/runs", label: "Runs" },
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/check" element={<Check />} />
             <Route path="/create" element={<CreatePdbs />} />
             <Route path="/drop" element={<DropPdbs />} />
+            <Route path="/load" element={<LoadSoe />} />
             <Route path="/runs" element={<Runs />} />
             <Route path="/runs/:id" element={<RunDetail key={location.pathname} />} />
             {NAV.filter((n) => n.milestone).map((n) => (

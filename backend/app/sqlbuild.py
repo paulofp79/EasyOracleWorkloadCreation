@@ -139,3 +139,15 @@ DROP PLUGGABLE DATABASE {pdb} INCLUDING DATAFILES;
 def drop_pdb_sql(pdb: str, rac: bool) -> str:
     """One PDB per sqlplus session (the script batches them in one file; same statements)."""
     return "WHENEVER OSERROR EXIT FAILURE\nWHENEVER SQLERROR EXIT SQL.SQLCODE\n" + drop_pdb_block(pdb, rac) + "EXIT\n"
+
+
+def soe_setup_sql(pdb: str, soe_password: str) -> str:
+    """create_swingbench.sh step 1: create the SOE user if missing, or reset its password."""
+    return f"""WHENEVER OSERROR EXIT FAILURE
+WHENEVER SQLERROR EXIT SQL.SQLCODE
+SET DEFINE OFF
+SET ECHO OFF
+ALTER SESSION SET CONTAINER = {pdb};
+GRANT DBA TO soe IDENTIFIED BY "{soe_password}";
+EXIT SUCCESS
+"""

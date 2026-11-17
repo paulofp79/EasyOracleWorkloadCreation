@@ -4,7 +4,8 @@ This document describes the application as built (v1, milestones M0–M6) from a
 of view: context, deployment, network and security, software components, data, runtime behaviour and
 operations. Diagrams are [Mermaid](https://mermaid.js.org/) and render on GitHub. Design rationale and
 parity notes with the original scripts are in [`ARCHITECTURE.md`](ARCHITECTURE.md); installation and
-operation in [`INSTALL.md`](INSTALL.md) and [`OPERATIONS.md`](OPERATIONS.md).
+operation in [`INSTALL.md`](INSTALL.md) and [`OPERATIONS.md`](OPERATIONS.md). PNG exports of every
+diagram (for slides and documents) are in [`diagrams/`](diagrams/), numbered in the order below.
 
 **Contents**
 
@@ -197,7 +198,7 @@ flowchart TB
         STREAM["useRunStream<br/>REST snapshot + EventSource"]
         VALTS["validators.ts"]
     end
-    subgraph BE["Backend - FastAPI on Uvicorn, one process"]
+    subgraph BE["Backend"]
         MW["Auth middleware<br/>session + CSRF check"]
         API["REST routers<br/>profiles, env, pdbs, runs,<br/>artifacts, session, auth, audit"]
         SSE["SSE endpoints<br/>run events, live log tail"]
@@ -248,6 +249,7 @@ flowchart TB
 | Component | Responsibility |
 |---|---|
 | Web UI | Forms with plan/dry run, inline validation, equivalent-command preview, live tile grid, drawers with log tails, history, compare, audit |
+| Backend | FastAPI on Uvicorn, one Python process with an asyncio event loop |
 | Auth middleware | With login on: rejects API calls without a session (401) and state changes without the CSRF token (403) |
 | Validators | One rule set for every field that reaches SQL or a command line; mirrored in the browser and tested with shared vectors |
 | Operations | One class per run type: validate, `plan()` (dry run), `execute()`; same behaviour as the reference scripts |

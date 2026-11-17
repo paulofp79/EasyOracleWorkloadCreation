@@ -3,13 +3,13 @@ PY      ?= python3.11
 VENV    := .venv
 VPY     := $(VENV)/bin/python
 
-.PHONY: venv frontend test test-backend test-frontend sim dev-backend dev-frontend sim-reset wheels clean
+.PHONY: venv frontend test test-backend test-frontend sim dev-backend dev-frontend sim-reset wheels bundle clean
 
 venv:
 	$(PY) -m venv $(VENV)
 	$(VPY) -m pip install -q -e 'backend[dev]'
 
-frontend:
+frontend:        # rebuild the committed UI after changing frontend/src (Node 20+), then commit frontend/dist
 	cd frontend && npm ci --no-audit --no-fund && npm run build
 
 test: test-backend test-frontend
@@ -35,9 +35,12 @@ sim-reset:
 	tools/stubs/simctl reset
 	rm -f var/sim/orchestrator.db*
 
-# Offline install bundle for the Oracle host (python3.11, linux x86_64)
+# Offline install: wheels only, or the complete bundle (dist/pdb-orchestrator-<version>.tgz)
 wheels:
 	scripts/build-wheels.sh
 
-clean:
-	rm -rf frontend/dist dist var
+bundle:
+	scripts/bundle.sh
+
+clean:          # frontend/dist is committed: it is not removed here
+	rm -rf dist var

@@ -294,3 +294,4 @@ details summary { cursor: pointer; color: var(--accent); margin: .25rem 0; }
 a.btn { text-decoration: none; display: inline-block; }
 .row-diff { background: var(--warn-bg); }
 .cmp-cell { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.audit-params { max-width: 52rem; overflow-wrap: anywhere; }

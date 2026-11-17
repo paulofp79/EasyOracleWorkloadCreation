@@ -141,3 +141,13 @@ Five failed logins per address lock it out for 60 s. HTTPS uses the operator's c
 self-signed one generated with openssl; `ORCH_TLS=off` is for a TLS-terminating reverse proxy. The
 audit log records the logged-in user as actor.
 
+## 11. M6: deployment and audit
+
+* `scripts/install.sh` (app user; online, or `--offline` from `dist/wheels`), `scripts/install-service.sh`
+  (root; systemd unit from `deploy/pdb-orchestrator.service.in`, env file from the user's login
+  environment, `--dry-run`), `scripts/bundle.sh` (offline tarball with code, built UI and wheels).
+* systemd: `KillMode=mixed` so SIGTERM reaches the app only and it stops the active run's process groups
+  itself; `Restart=on-failure`; the service runs from `backend/` so no package install is required.
+* `/api/audit` and the Audit log page; a secret-leak test drives every operation with unique secrets and
+  searches all files, the database and all API responses.
+

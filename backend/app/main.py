@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import validators as v
-from .api import artifacts, auth as auth_api, env, pdbs, profiles, runs, session
+from .api import artifacts, audit, auth as auth_api, env, pdbs, profiles, runs, session
 from .auth import AUTH_COOKIE, CSRF_HEADER, AuthStore
 from .config import FRONTEND_DIST, STUB_DIR, Settings, load_settings
 from .db import Database
@@ -105,6 +105,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(artifacts.router)
     app.include_router(session.router)
     app.include_router(auth_api.router)
+    app.include_router(audit.router)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str):

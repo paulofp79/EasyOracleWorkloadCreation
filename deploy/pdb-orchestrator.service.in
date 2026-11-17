@@ -1,0 +1,28 @@
+# Installed by scripts/install-service.sh. Settings live in @ENV_FILE@.
+[Unit]
+Description=PDB Swingbench Orchestrator
+Documentation=file://@APP_DIR@/docs/OPERATIONS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@APP_DIR@/backend
+EnvironmentFile=@ENV_FILE@
+ExecStart=@APP_DIR@/venv/bin/python -m app
+Restart=on-failure
+RestartSec=5
+# Stop: SIGTERM goes to the app only; it stops a running run's sqlplus/oewizard/charbench process
+# groups itself (TERM, KILL after 2 s) and marks the run cancelled. Whatever is still left in the
+# service's cgroup after TimeoutStopSec is killed by systemd.
+KillMode=mixed
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

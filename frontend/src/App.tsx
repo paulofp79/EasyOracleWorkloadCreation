@@ -4,6 +4,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api, AUTH_REQUIRED } from "./api/client";
 import Login from "./pages/Login";
 import SysSession from "./components/SysSession";
+import Audit from "./pages/Audit";
 import Check from "./pages/Check";
 import Compare from "./pages/Compare";
 import CreatePdbs from "./pages/CreatePdbs";
@@ -28,6 +29,7 @@ const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/runs", label: "Runs" },
   { to: "/profiles", label: "Profiles" },
   { to: "/environment", label: "Environment" },
+  { to: "/audit", label: "Audit log" },
 ];
 
 type Theme = "auto" | "light" | "dark";
@@ -148,6 +150,7 @@ function Shell({ user }: { user: string | null }) {
             <Route path="/" element={<Dashboard />} />
             <Route path="/profiles" element={<Profiles />} />
             <Route path="/environment" element={<Environment />} />
+            <Route path="/audit" element={<Audit />} />
             <Route path="/pdbs" element={<Pdbs />} />
             <Route path="/check" element={<Check />} />
             <Route path="/create" element={<CreatePdbs />} />

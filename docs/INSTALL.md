@@ -1,7 +1,10 @@
 # Installing on Oracle Linux
 
-Target: Oracle Linux 8 or 9 (x86_64). The app runs as `oracle`, needs no root at run time and
-listens on `127.0.0.1:8080` only. Pick one of two layouts (set in the profile, "CDB connection"):
+Target: Oracle Linux 8 or 9 (x86_64). The app runs as `oracle` (or the user that owns Swingbench),
+needs no root at run time, and listens on `127.0.0.1:8080` unless you choose direct access (step 6).
+Day-to-day operation (service, logs, backups, upgrades, troubleshooting): [`OPERATIONS.md`](OPERATIONS.md).
+
+Pick one of two layouts (profile setting "CDB connection"):
 
 | Layout | Privileged SQL | Needs on the app host |
 |---|---|---|
@@ -14,44 +17,33 @@ needs a password file that allows remote SYSDBA logons (`remote_login_passwordfi
 usual RAC setting); the CDB root service is typically `<db_unique_name>.<db_domain>`
 (`lsnrctl status` or `select name from v$services` in CDB$ROOT shows it).
 
-Two ways to install:
-
-* **A. The server can reach GitHub, PyPI and npm** (directly or through a proxy): steps 1–8.
-* **B. The server has no internet access**: build a bundle elsewhere, then copy it (section B).
+Two ways to install: **A** when the server can reach GitHub and PyPI (directly, through a proxy or a
+pip mirror), **B** from an offline bundle.
 
 ## A. Online install
 
 ### 1. Prerequisites (as root)
 
 ```bash
-# Oracle Linux 8 (8.8 or later) and Oracle Linux 9 (9.2 or later)
-dnf install -y git python3.11 python3.11-pip
+dnf install -y git python3.11 python3.11-pip      # OL 8.8+ / 9.2+
 ```
 
-Check: `python3.11 --version` (3.11.x). Node.js is **not** needed: the built web UI is part of the
-repository (`frontend/dist`).
+* If dnf stops with "Failed to download metadata for repo '<name>'" (an internal repository that needs
+  credentials), add `--disablerepo=<name>` to the dnf command.
+* Node.js is **not** needed: the built web UI is part of the repository (`frontend/dist`).
+* Swingbench must be installed for the app user on this host, with the Java version your Swingbench
+  release needs (e.g. `dnf install -y java-17-openjdk`).
 
-If dnf stops with "Failed to download metadata for repo '<name>'" (an internal repository that needs
-credentials), skip that repository for this command: `dnf --disablerepo=<name> install -y git python3.11 python3.11-pip`.
-
-Swingbench must be installed for `oracle` on the host that runs the app (with the Java version your
-Swingbench release needs, e.g. `dnf install -y java-17-openjdk`), e.g. `/home/oracle/swingbench/bin/charbench`.
-
-**Remote layout only: Oracle Instant Client with SQL*Plus** (from the Oracle Linux yum server):
+**Remote layout only: Oracle Instant Client with SQL*Plus** (Oracle Linux yum server):
 
 ```bash
-# OL8 (use the -el9 package on OL9); 23ai clients connect to 19c and later databases
-dnf install -y oracle-instantclient-release-23ai-el8
+dnf install -y oracle-instantclient-release-23ai-el8      # -el9 on OL9; 23ai clients work with 19c+
 dnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus
-which sqlplus && sqlplus -V
 ```
 
-Package names differ between client releases (`dnf search oracle-instantclient` lists them). If only
-`sqlplus64` is on the PATH, add the client's `bin` directory (e.g. `/usr/lib/oracle/*/client64/bin`) to
-`oracle`'s PATH.
-
-Check the remote SYSDBA logon the way the app does it (the password is read without echo and only
-goes to sqlplus on stdin); it must print `CDB$ROOT`:
+`dnf search oracle-instantclient` lists the names for other client releases. If only `sqlplus64` ends
+up on the PATH, add the client's `bin` directory to the app user's PATH. Check the remote SYSDBA logon
+exactly as the app does it (password read without echo, given to sqlplus on stdin); it prints `CDB$ROOT`:
 
 ```bash
 read -rs -p "SYS password: " SYSPW; echo
@@ -59,174 +51,111 @@ printf 'CONNECT sys/"%s"@//%s AS SYSDBA\nselect sys_context(%s) from dual;\nexit
   "<scan-host>:1521/<cdb-root-service>" "'userenv','con_name'" | sqlplus -L -s /nolog
 ```
 
-If the server reaches the internet through a proxy, export it in the shell you use for the following
-steps: `export https_proxy=http://proxy.example.com:80 http_proxy=$https_proxy`.
-
-### 2. Get the code (as oracle)
+### 2. Get the code and install it (as the app user)
 
 ```bash
 sudo su - oracle
 git clone -b claude/gracious-ptolemy-uu1i4i https://github.com/paulofp79/EasyOracleWorkloadCreation.git ~/pdb-orchestrator
-cd ~/pdb-orchestrator
+cd ~/pdb-orchestrator && scripts/install.sh
 ```
 
-The repository is private: use a GitHub personal access token as the password, or an SSH URL
-(`git@github.com:paulofp79/EasyOracleWorkloadCreation.git`) with a key added to GitHub. Once the work
-is merged to `main`, drop `-b claude/gracious-ptolemy-uu1i4i`.
+The repository is private: use a GitHub personal access token as the password, or the SSH URL with a
+key added to GitHub. Once the work is merged to `main`, drop `-b claude/gracious-ptolemy-uu1i4i`.
+`scripts/install.sh` creates `venv/` and installs the backend. Behind a proxy export `https_proxy`
+first; with a pip mirror set `PIP_INDEX_URL=https://<mirror>/simple`.
 
-### 3. Python environment and backend
+### 3. Oracle environment (local layout only)
+
+The local layout uses OS authentication exactly like the scripts, so the app needs the CDB
+environment. Put it in the app user's `~/.bash_profile` (the service installer copies it from there):
 
 ```bash
-cd ~/pdb-orchestrator
-python3.11 -m venv venv
-venv/bin/pip install --upgrade pip
-venv/bin/pip install -e ./backend
+export ORACLE_SID=<cdb instance on this node>
+export ORAENV_ASK=NO; . oraenv >/dev/null
 ```
 
-### 4. Web UI
+Check: `sqlplus -L -s / as sysdba <<< "select name, cdb from v\$database;"`. The remote layout needs
+nothing here.
 
-Nothing to do: the built UI is committed in `frontend/dist` and served by the backend. Rebuilding
-it (`cd frontend && npm ci && npm run build`, Node.js 20+) is only needed if you change the UI source,
-and needs access to the npm registry.
-
-### 5. Oracle environment
-
-**Remote layout:** nothing to set; skip to step 6 (sqlplus only has to be on the PATH).
-
-**Local layout:** the backend uses OS authentication exactly like the scripts, so the shell that
-starts it needs the CDB environment:
+### 4. Try it by hand
 
 ```bash
-export ORACLE_SID=<cdb instance on this node>      # e.g. the local instance of the RAC CDB
-. oraenv <<< "$ORACLE_SID"                          # or export ORACLE_HOME and PATH yourself
-sqlplus -L -s / as sysdba <<< "select name, cdb from v\$database;"    # must work before going on
+cd ~/pdb-orchestrator/backend && ../venv/bin/python -m app
 ```
 
-### 6. Start
-
-Foreground (Ctrl-C stops it):
-
-```bash
-cd ~/pdb-orchestrator
-venv/bin/python -m app
-```
-
-To keep it running after you log out, use `tmux` (`dnf install -y tmux`) or:
-
-```bash
-cd ~/pdb-orchestrator
-nohup venv/bin/python -m app >> ~/pdb-orchestrator/orchestrator.log 2>&1 &
-```
-
-Settings come from environment variables: `ORCH_PORT` (default 8080), `ORCH_DB` (default
-`~/.pdb-orchestrator/orchestrator.db`). Binding to anything other than localhost is refused until
-authentication exists (milestone M6). A systemd unit follows in M6.
-
-### 7. Open the UI
-
-**Option A, SSH tunnel** (nothing to open on the server; the app stays on 127.0.0.1, no login):
+Ctrl-C stops it. Open it through an SSH tunnel from your workstation, then http://localhost:8080:
 
 ```bash
 ssh -N -L 8080:127.0.0.1:8080 <user>@<app-host>
 ```
 
-Then browse to http://localhost:8080. Through a jump host add `-J <user>@<bastion>`.
-
-**Option B, direct access over HTTPS with a login.** Create a login once (as the same OS user that
-runs the app; it asks for the password twice, at least 10 characters):
+### 5. Install the service (as root)
 
 ```bash
-cd ~/pdb-orchestrator && venv/bin/python -m app set-password
+sudo ~oracle/pdb-orchestrator/scripts/install-service.sh --user oracle
 ```
 
-Start the app on all interfaces. HTTPS is switched on automatically, with a self-signed certificate
-generated on the first start in `~/.pdb-orchestrator/tls/` (key mode 600):
+This writes `/etc/systemd/system/pdb-orchestrator.service` and `/etc/pdb-orchestrator/orchestrator.env`
+(PATH, ORACLE_HOME, ORACLE_SID, LD_LIBRARY_PATH taken from the user's login shell), then enables and
+starts the service. `--dry-run` prints both files without installing anything; an existing env file is
+never overwritten. Logs: `journalctl -u pdb-orchestrator -f`.
+
+### 6. Direct access over HTTPS (optional)
+
+Instead of the SSH tunnel, the app can listen on the network. That requires a login and switches HTTPS
+on (self-signed certificate generated on first start in `~/.pdb-orchestrator/tls/`, or your own).
 
 ```bash
-cd ~/pdb-orchestrator && ORCH_HOST=0.0.0.0 ORCH_PORT=8443 venv/bin/python -m app
+cd ~/pdb-orchestrator/backend && ../venv/bin/python -m app set-password       # as oracle; user 'admin'
 ```
 
-Open the port in the firewall (as root):
+Then either install the service with `--host 0.0.0.0 --port 8443`, or set `ORCH_HOST=0.0.0.0` and
+`ORCH_PORT=8443` in `/etc/pdb-orchestrator/orchestrator.env` and `systemctl restart pdb-orchestrator`.
+Open the port (as root):
 
 ```bash
 firewall-cmd --permanent --add-port=8443/tcp && firewall-cmd --reload
 ```
 
-Browse to `https://<app-host>:8443`. The browser warns once about the self-signed certificate:
-compare the SHA-256 fingerprint the app logs at start with the one the browser shows, then accept it.
+Browse to `https://<app-host>:8443`; the browser warns once about the self-signed certificate (compare
+the SHA-256 fingerprint in `journalctl -u pdb-orchestrator` with the one it shows). Your own
+certificate: `ORCH_TLS_CERT` / `ORCH_TLS_KEY` in the env file. Behind a TLS reverse proxy: `ORCH_TLS=off`.
 
-* Your own certificate instead: `ORCH_TLS_CERT=/path/cert.pem ORCH_TLS_KEY=/path/key.pem`.
-* Behind a reverse proxy that already terminates HTTPS (nginx, OCI load balancer): `ORCH_TLS=off`,
-  bind to the proxy-facing address. Login stays on.
-* Logins: `python -m app set-password --user <name>` (create or change), `python -m app users`,
-  `python -m app delete-user <name>`. The audit log records who started, stopped or dropped what.
-* Sessions end after 8 hours idle (24 hours at most) or when the app restarts. Five wrong passwords from
-  one address lock it out for a minute.
-* Without a login the app refuses to start on a network address.
+### 7. First use
 
-### 8. First use
+1. **Profiles**: SCAN host and port, service suffix, **CDB connection** (local/remote) and the **CDB
+   root service** for remote, RAC CDB, `oewizard`/`charbench` paths, config XML, log directory, defaults.
+2. Remote layout: **SYS password needed** in the top bar.
+3. **Environment**: "Run check again" until everything passes.
+4. **PDBs**: confirm the inventory matches `gv$pdbs`, then start with **Check connections** on a few PDBs.
 
-1. **Profiles**: edit the `default` profile: SCAN host and port, service suffix (e.g. `.us.oracle.com`),
-   **CDB connection** (local or remote) and, for remote, the **CDB root service**, RAC CDB, `oewizard`
-   and `charbench` paths, config XML, log/run directory, ranges and defaults.
-2. Remote layout: click **SYS password needed** in the top bar and enter it (wrong passwords and wrong
-   services are reported right away, e.g. ORA-01017 / ORA-12514).
-3. **Environment**: "Run check again" until sqlplus, the SYSDBA connection (CDB name, version,
-   instances, container CDB$ROOT), oewizard, charbench, config XML and the log directory all pass.
-4. **PDBs**: confirm the inventory matches `gv$pdbs`.
-5. Start with something harmless: **Check connections** on a few PDBs.
+Rehearsal without touching Oracle: `ORCH_MODE=simulate ORCH_PORT=8081 ../venv/bin/python -m app` (from
+`backend/`) runs the whole UI against the stub tools (separate database under `var/sim`).
 
-Optional rehearsal without touching Oracle: `ORCH_MODE=simulate ORCH_PORT=8081 venv/bin/python -m app`
-runs the whole UI against the stub tools in `tools/stubs` (separate database under `var/sim`).
+## B. Offline install (no internet on the server)
 
-## B. Offline install (server without internet)
-
-On a build machine with internet, `python3.11` and the same CPU architecture (x86_64):
+On any Linux x86_64 machine with `python3.11` and access to PyPI (or a mirror):
 
 ```bash
 git clone -b claude/gracious-ptolemy-uu1i4i https://github.com/paulofp79/EasyOracleWorkloadCreation.git pdb-orchestrator
-cd pdb-orchestrator
-scripts/build-wheels.sh                    # dist/wheels/*.whl + dist/requirements.lock
-cd .. && tar czf pdb-orchestrator.tgz --exclude=node_modules --exclude=.git pdb-orchestrator
-scp pdb-orchestrator.tgz oracle@<db-host>:
+cd pdb-orchestrator && scripts/bundle.sh            # dist/pdb-orchestrator-<version>.tgz (about 4 MB)
+scp dist/pdb-orchestrator-*.tgz oracle@<app-host>:
 ```
 
-On the server (as root: `dnf install -y python3.11`; git is not needed), then as `oracle`:
+On the server (`dnf install -y python3.11` as root first), as the app user:
 
 ```bash
-tar xzf pdb-orchestrator.tgz && cd pdb-orchestrator
-python3.11 -m venv venv
-venv/bin/pip install --no-index --find-links dist/wheels -r dist/requirements.lock
-venv/bin/pip install --no-index --find-links dist/wheels --no-deps pdb-orchestrator
-# Oracle environment as in step 5, then:
-ORCH_HOME=$PWD venv/bin/python -m app
+tar xzf pdb-orchestrator-*.tgz -C ~ && cd ~/pdb-orchestrator && scripts/install.sh --offline
 ```
 
-`ORCH_HOME` tells the installed package where the built UI and the stubs are. Continue with steps 7–8.
+Then continue with steps 3–7. The bundle contains the code, the built UI, the Python wheels for
+python3.11/x86_64, the scripts and the docs.
 
 ## Updating
 
 ```bash
-cd ~/pdb-orchestrator
-git pull
-venv/bin/pip install -e ./backend
-# stop the running app (no run in progress), start it again as in step 6
+cd ~/pdb-orchestrator && git pull && scripts/install.sh       # offline: unpack the new bundle over it
+sudo systemctl restart pdb-orchestrator                         # when no run is in progress
 ```
 
-The SQLite database is migrated automatically on start; profiles and run history are kept.
-
-## Good to know
-
-* **Stopping the app** (Ctrl-C, `kill`) stops the processes of a run in progress, like Stop all. If the
-  app is killed hard (`kill -9`, host crash), workloads keep running; on the next start the run is
-  marked *interrupted* and the run page offers **Kill leftovers**.
-* **Data**: the database is `~/.pdb-orchestrator/orchestrator.db`; logs, TSVs and result XML files are in
-  `<log dir>/run-<id>/` (mode 700, files 600), with `<log dir>/latest` pointing at the newest run.
-* **Passwords** are entered per run, never stored, passed to sqlplus on stdin and masked in all logs.
-  oewizard and charbench only accept them on the command line, so they are visible in `ps` while those
-  run.
-* **If PyPI is blocked** like the npm registry can be, either point pip at your internal mirror
-  (`venv/bin/pip install --index-url https://<mirror>/simple -e ./backend`) or use the offline bundle (B).
-* **Do not run it as root**: it must be the OS user that owns the Oracle and Swingbench installation.
-* **Disk**: each workload run writes one charbench log and one results file per PDB; check free space in
-  the log directory (shown by the environment check).
+The database is migrated automatically on start; profiles, logins and run history are kept.

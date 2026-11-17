@@ -269,6 +269,28 @@ class Database:
         return self.conn.execute("DELETE FROM users WHERE username = ?", (username,)).rowcount > 0
 
     # ---- audit ----------------------------------------------------------------------------
+    def audit_entries(self, limit: int = 100, offset: int = 0, action: str | None = None,
+                      actor: str | None = None, run_id: str | None = None) -> tuple[list[dict[str, Any]], int]:
+        where, args = [], []
+        if action:
+            where.append("action = ?")
+            args.append(action)
+        if actor:
+            where.append("actor LIKE ?")
+            args.append(f"%{actor}%")
+        if run_id:
+            where.append("run_id = ?")
+            args.append(run_id)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        total = self.conn.execute(f"SELECT COUNT(*) FROM audit_log {clause}", args).fetchone()[0]
+        rows = self.conn.execute(f"SELECT * FROM audit_log {clause} ORDER BY id DESC LIMIT ? OFFSET ?",
+                                 (*args, limit, offset)).fetchall()
+        return [{"id": r["id"], "ts": r["ts"], "actor": r["actor"], "action": r["action"], "run_id": r["run_id"],
+                 "params": json.loads(r["params_json"] or "{}")} for r in rows], total
+
+    def audit_actions(self) -> list[str]:
+        return [r[0] for r in self.conn.execute("SELECT DISTINCT action FROM audit_log ORDER BY action")]
+
     def audit(self, actor: str, action: str, run_id: str | None = None,
               params: dict[str, Any] | None = None) -> None:
         self.conn.execute("INSERT INTO audit_log(ts, actor, action, run_id, params_json) VALUES (?,?,?,?,?)",

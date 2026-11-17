@@ -176,6 +176,8 @@ export interface Comparison {
 export const fileUrl = (runId: string, path: string) =>
   `/api/runs/${runId}/files/${path.split("/").map(encodeURIComponent).join("/")}`;
 
+export interface AuditEntry { id: number; ts: string; actor: string; action: string; run_id: string | null; params: Record<string, unknown> }
+
 export interface AuthState { auth_enabled: boolean; user: string | null; tls: boolean }
 
 export const api = {
@@ -216,6 +218,11 @@ export const api = {
   killLeftovers: (id: string) =>
     request<{ stopped: string[]; still_alive: string[] }>("POST", `/api/runs/${id}/kill-leftovers`),
   compare: (a: string, b: string) => request<Comparison>("GET", `/api/runs/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
+  audit: (f: { action?: string; actor?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return request<{ entries: AuditEntry[]; total: number; actions: string[] }>("GET", `/api/audit?${qs}`);
+  },
   activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),
   run: (id: string) => request<Run>("GET", `/api/runs/${id}`),
   items: (id: string) => request<{ items: RunItem[]; event_seq: number | null }>("GET", `/api/runs/${id}/items`),

@@ -65,8 +65,9 @@ A systemd unit and install script follow in M6.
 
 ## Access and security
 
-The server binds to `127.0.0.1:8080` and refuses any other address until authentication
-exists (M6). From your workstation use an SSH tunnel:
+The server binds to `127.0.0.1:8080` by default. For direct access set `ORCH_HOST=0.0.0.0`: that
+requires a login (`python -m app set-password`) and serves HTTPS (see `docs/INSTALL.md`, step 7).
+Or keep it on localhost and use an SSH tunnel:
 
 ```bash
 ssh -L 8080:127.0.0.1:8080 oracle@<db-host>
@@ -81,5 +82,8 @@ command-line arguments, so those are visible in `ps` on the host while they run.
 | `ORCH_HOME` | source checkout | directory holding `frontend/dist` and `tools/stubs` |
 | `ORCH_MODE` | `real` | `simulate` uses the stubs in `tools/stubs` |
 | `ORCH_DB` | `~/.pdb-orchestrator/orchestrator.db` (`var/sim/orchestrator.db` in simulation) | SQLite file |
-| `ORCH_HOST` / `ORCH_PORT` | `127.0.0.1` / `8080` | bind address |
+| `ORCH_HOST` / `ORCH_PORT` | `127.0.0.1` / `8080` | bind address; any non-loopback address (e.g. `0.0.0.0`) turns on login and HTTPS |
+| `ORCH_AUTH` | off on 127.0.0.1 | `on` requires login also on localhost |
+| `ORCH_TLS` | `auto` | HTTPS on network addresses; `on`, or `off` behind a TLS reverse proxy |
+| `ORCH_TLS_CERT` / `ORCH_TLS_KEY` | self-signed in `<db dir>/tls/` | your own certificate and key (PEM) |
 | `ORCH_SIM_SCENARIO` | `tools/stubs/scenario.json` | simulation scenario |

@@ -65,7 +65,8 @@ async def set_sys_password(body: SysIn, request: Request, response: Response):
     expires = store(request).set_sys_password(sid, pw, body.hours)
     db(request).audit(actor(request), "sys_password_set", params={"hours": body.hours})
     out = JSONResponse({**_state(request, sid), "expires_at": _iso(expires), "sys_password_set": True})
-    out.set_cookie(COOKIE, sid, max_age=int(body.hours * 3600), httponly=True, samesite="strict", path="/api")
+    out.set_cookie(COOKIE, sid, max_age=int(body.hours * 3600), httponly=True, samesite="strict", path="/api",
+                   secure=settings(request).secure_cookies)
     return out
 
 

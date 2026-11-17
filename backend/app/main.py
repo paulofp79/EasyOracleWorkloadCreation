@@ -1,6 +1,7 @@
 """FastAPI application factory."""
 from __future__ import annotations
 
+import hmac
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -11,7 +12,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import validators as v
-from .api import artifacts, env, pdbs, profiles, runs, session
+from .api import artifacts, auth as auth_api, env, pdbs, profiles, runs, session
+from .auth import AUTH_COOKIE, CSRF_HEADER, AuthStore
 from .config import FRONTEND_DIST, STUB_DIR, Settings, load_settings
 from .db import Database
 from .engine.runs import RunManager
@@ -58,6 +60,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="PDB Swingbench Orchestrator", lifespan=lifespan, docs_url="/api/docs",
                   openapi_url="/api/openapi.json", redoc_url=None)
     app.state.settings = settings
+    app.state.auth = AuthStore()
+
+    PUBLIC = {"/api/health", "/api/auth/state", "/api/auth/login"}
+    UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
+
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        """With auth on: every API call needs a login session, and changes need the CSRF token."""
+        path = request.url.path
+        if settings.auth and path.startswith("/api/") and path not in PUBLIC:
+            sess = request.app.state.auth.get(request.cookies.get(AUTH_COOKIE))
+            if sess is None:
+                return JSONResponse({"error": "login required"}, status_code=401)
+            if request.method in UNSAFE and not hmac.compare_digest(
+                    request.headers.get(CSRF_HEADER, ""), sess.csrf):
+                return JSONResponse({"error": "missing or invalid CSRF token; reload the page"}, status_code=403)
+            request.state.user = sess.user
+        return await call_next(request)
 
     @app.exception_handler(v.ValidationError)
     async def _validation(_: Request, exc: v.ValidationError):
@@ -84,6 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(runs.router)
     app.include_router(artifacts.router)
     app.include_router(session.router)
+    app.include_router(auth_api.router)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str):

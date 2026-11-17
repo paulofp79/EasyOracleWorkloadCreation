@@ -72,3 +72,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
   run_id      TEXT,
   params_json TEXT
 );
+
+CREATE TABLE IF NOT EXISTS users (
+  username      TEXT PRIMARY KEY,
+  password_hash TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);

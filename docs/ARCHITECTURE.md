@@ -129,3 +129,13 @@ so no statement runs unconnected. All privileged SQL goes through `app/sysdba.py
 comes from the request or from an in-memory, per-browser session (HttpOnly SameSite=Strict cookie,
 1–24 h expiry, verified by a SYSDBA logon when set, lost on restart, never written anywhere).
 
+## 10. Change: login and HTTPS for network access (approved, from M6)
+
+Binding to a non-loopback address turns on authentication and HTTPS. Logins are created on the server
+(`python -m app set-password`), stored as scrypt hashes (schema v2 `users` table). A login creates an
+in-memory session (HttpOnly SameSite=Strict cookie, Secure over HTTPS, 8 h idle / 24 h absolute);
+state-changing requests must carry the session's CSRF token in `X-CSRF-Token` (double-submit cookie).
+Five failed logins per address lock it out for 60 s. HTTPS uses the operator's certificate or a
+self-signed one generated with openssl; `ORCH_TLS=off` is for a TLS-terminating reverse proxy. The
+audit log records the logged-in user as actor.
+

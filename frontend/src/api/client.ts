@@ -4,12 +4,25 @@ export class ApiError extends Error {
   }
 }
 
+function csrfToken(): string {
+  const m = document.cookie.match(/(?:^|;\s*)orch_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+/** Fired when the server says a login is needed; App shows the login page. */
+export const AUTH_REQUIRED = "orch-auth-required";
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (method !== "GET") headers["X-CSRF-Token"] = csrfToken();
   const res = await fetch(path, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers,
+    credentials: "same-origin",
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && !path.startsWith("/api/auth/")) window.dispatchEvent(new Event(AUTH_REQUIRED));
   if (res.status === 204) return undefined as T;
   let data: any = null;
   try {
@@ -148,7 +161,12 @@ export interface SessionState {
   connection: string;
 }
 
+export interface AuthState { auth_enabled: boolean; user: string | null; tls: boolean }
+
 export const api = {
+  authState: () => request<AuthState>("GET", "/api/auth/state"),
+  login: (username: string, password: string) => request<{ user: string; csrf: string }>("POST", "/api/auth/login", { username, password }),
+  logout: () => request<{ user: null }>("POST", "/api/auth/logout"),
   session: () => request<SessionState>("GET", "/api/session"),
   setSysPassword: (sys_password: string, hours: number) =>
     request<SessionState>("PUT", "/api/session/sys-password", { sys_password, hours }),

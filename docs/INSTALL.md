@@ -113,13 +113,47 @@ Settings come from environment variables: `ORCH_PORT` (default 8080), `ORCH_DB` 
 `~/.pdb-orchestrator/orchestrator.db`). Binding to anything other than localhost is refused until
 authentication exists (milestone M6). A systemd unit follows in M6.
 
-### 7. Open the UI from your workstation
+### 7. Open the UI
+
+**Option A, SSH tunnel** (nothing to open on the server; the app stays on 127.0.0.1, no login):
 
 ```bash
-ssh -L 8080:127.0.0.1:8080 oracle@<db-host>
+ssh -N -L 8080:127.0.0.1:8080 <user>@<app-host>
 ```
 
-Then browse to http://localhost:8080. Through a jump host: `ssh -J user@bastion -L 8080:127.0.0.1:8080 oracle@<db-host>`.
+Then browse to http://localhost:8080. Through a jump host add `-J <user>@<bastion>`.
+
+**Option B, direct access over HTTPS with a login.** Create a login once (as the same OS user that
+runs the app; it asks for the password twice, at least 10 characters):
+
+```bash
+cd ~/pdb-orchestrator && venv/bin/python -m app set-password
+```
+
+Start the app on all interfaces. HTTPS is switched on automatically, with a self-signed certificate
+generated on the first start in `~/.pdb-orchestrator/tls/` (key mode 600):
+
+```bash
+cd ~/pdb-orchestrator && ORCH_HOST=0.0.0.0 ORCH_PORT=8443 venv/bin/python -m app
+```
+
+Open the port in the firewall (as root):
+
+```bash
+firewall-cmd --permanent --add-port=8443/tcp && firewall-cmd --reload
+```
+
+Browse to `https://<app-host>:8443`. The browser warns once about the self-signed certificate:
+compare the SHA-256 fingerprint the app logs at start with the one the browser shows, then accept it.
+
+* Your own certificate instead: `ORCH_TLS_CERT=/path/cert.pem ORCH_TLS_KEY=/path/key.pem`.
+* Behind a reverse proxy that already terminates HTTPS (nginx, OCI load balancer): `ORCH_TLS=off`,
+  bind to the proxy-facing address. Login stays on.
+* Logins: `python -m app set-password --user <name>` (create or change), `python -m app users`,
+  `python -m app delete-user <name>`. The audit log records who started, stopped or dropped what.
+* Sessions end after 8 hours idle (24 hours at most) or when the app restarts. Five wrong passwords from
+  one address lock it out for a minute.
+* Without a login the app refuses to start on a network address.
 
 ### 8. First use
 

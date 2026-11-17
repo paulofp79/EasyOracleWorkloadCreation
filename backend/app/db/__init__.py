@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 
@@ -34,8 +34,9 @@ class Database:
         if version > SCHEMA_VERSION:
             raise RuntimeError(f"Database {self.path} has schema {version}, newer than this program "
                                f"({SCHEMA_VERSION}). Upgrade the program.")
-        if version < 1:
-            # executescript commits on its own; the script is idempotent (IF NOT EXISTS).
+        if version < SCHEMA_VERSION:
+            # v1 -> v2 only adds the users table. The script is idempotent (IF NOT EXISTS) and
+            # executescript commits on its own.
             self.conn.executescript(SCHEMA_FILE.read_text() + f"\nPRAGMA user_version = {SCHEMA_VERSION};\n")
 
     def tx(self):
@@ -245,6 +246,27 @@ class Database:
         rows = self.conn.execute("SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
                                  (prefix,)).fetchall()
         return {r["pdb"]: dict(r) for r in rows}
+
+    # ---- users ----------------------------------------------------------------------------
+    def set_user(self, username: str, password_hash: str) -> bool:
+        """Create or update; returns True when the user is new."""
+        now = utcnow()
+        new = self.conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone() is None
+        self.conn.execute(
+            "INSERT INTO users(username, password_hash, created_at, updated_at) VALUES (?,?,?,?) "
+            "ON CONFLICT(username) DO UPDATE SET password_hash = excluded.password_hash, updated_at = excluded.updated_at",
+            (username, password_hash, now, now))
+        return new
+
+    def user_hash(self, username: str) -> str | None:
+        r = self.conn.execute("SELECT password_hash FROM users WHERE username = ?", (username,)).fetchone()
+        return r["password_hash"] if r else None
+
+    def list_users(self) -> list[str]:
+        return [r["username"] for r in self.conn.execute("SELECT username FROM users ORDER BY username")]
+
+    def delete_user(self, username: str) -> bool:
+        return self.conn.execute("DELETE FROM users WHERE username = ?", (username,)).rowcount > 0
 
     # ---- audit ----------------------------------------------------------------------------
     def audit(self, actor: str, action: str, run_id: str | None = None,

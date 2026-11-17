@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { api } from "./api/client";
+import { api, AUTH_REQUIRED } from "./api/client";
+import Login from "./pages/Login";
 import SysSession from "./components/SysSession";
 import Check from "./pages/Check";
 import CreatePdbs from "./pages/CreatePdbs";
@@ -72,7 +73,34 @@ function ProfileSwitcher() {
   );
 }
 
+function UserMenu({ user }: { user: string }) {
+  const qc = useQueryClient();
+  return (
+    <span className="small user-menu">
+      <span className="muted">Signed in as</span> <strong>{user}</strong>{" "}
+      <button className="linkbtn small" onClick={async () => { await api.logout(); qc.clear(); window.location.reload(); }}>
+        Sign out
+      </button>
+    </span>
+  );
+}
+
 export default function App() {
+  const qc = useQueryClient();
+  const auth = useQuery({ queryKey: ["auth"], queryFn: api.authState, staleTime: Infinity });
+  useEffect(() => {
+    const onAuth = () => qc.invalidateQueries({ queryKey: ["auth"] });
+    window.addEventListener(AUTH_REQUIRED, onAuth);
+    return () => window.removeEventListener(AUTH_REQUIRED, onAuth);
+  }, [qc]);
+  if (auth.isLoading) return null;
+  if (auth.data?.auth_enabled && !auth.data.user) {
+    return <Login tls={auth.data.tls} onDone={() => { void qc.resetQueries(); }} />;
+  }
+  return <Shell user={auth.data?.auth_enabled ? auth.data.user : null} />;
+}
+
+function Shell({ user }: { user: string | null }) {
   const { data: health } = useQuery({ queryKey: ["health"], queryFn: api.health });
   const [theme, setTheme] = useTheme();
   const location = useLocation();
@@ -104,6 +132,7 @@ export default function App() {
           <div className="spacer" />
           <SysSession />
           <ProfileSwitcher />
+          {user && <UserMenu user={user} />}
           <label className="theme-switch">
             <span>Theme</span>
             <select value={theme} onChange={(e) => setTheme(e.target.value as Theme)}>

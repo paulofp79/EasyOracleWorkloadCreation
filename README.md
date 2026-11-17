@@ -6,6 +6,7 @@ everything `reference/*.sh` does, from a browser, with live monitoring and histo
 
 - Requirements: [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
 - Design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Installing on Oracle Linux: [`docs/INSTALL.md`](docs/INSTALL.md)
 - Status: **M4** — profiles, environment check, PDB inventory, parallel SOE connection check,
   create/drop PDBs, SOE load (resume, keep-going, retry) and the workload: check, one charbench per PDB
   started at once, live monitoring with per-PDB logs, log error scan, Stop all. History/artifacts (M5)

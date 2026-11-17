@@ -11,6 +11,8 @@ from pydantic import BaseModel
 
 from .. import validators as v
 from ..engine.events import sse
+from ..db import utcnow
+from ..engine.leftovers import alive_items, kill_groups
 from ..engine.runs import Conflict, RunManager
 from ..ops.base import PlanError
 from ..ops.registry import OPERATIONS, RETRYABLE
@@ -83,11 +85,20 @@ async def create_run(body: RunIn, request: Request):
     return JSONResponse({"run_id": run_id}, status_code=201)
 
 
+RUN_STATUSES = {"running", "ok", "failed", "cancelled", "interrupted", "blocked"}
+
+
 @router.get("")
-def list_runs(request: Request, limit: int = 50, type: str | None = None):
+def list_runs(request: Request, limit: int = 50, offset: int = 0, type: str | None = None,
+              status: str | None = None, q: str | None = None, since: str | None = None, until: str | None = None):
+    if type is not None and type not in OPERATIONS:
+        raise v.ValidationError({"type": f"must be one of {', '.join(sorted(OPERATIONS))}"})
+    if status is not None and status not in RUN_STATUSES:
+        raise v.ValidationError({"status": f"must be one of {', '.join(sorted(RUN_STATUSES))}"})
     m = manager(request)
-    runs = db(request).list_runs(min(max(limit, 1), 500), type)
-    return {"runs": [m.run_view(r["id"]) for r in runs]}
+    runs, total = db(request).list_runs(min(max(limit, 1), 500), type, status, (q or "").strip()[:100] or None,
+                                        since, until, max(offset, 0))
+    return {"runs": [m.run_view(r["id"]) for r in runs], "total": total}
 
 
 @router.get("/active")
@@ -96,9 +107,64 @@ def active_run(request: Request):
     return {"run": manager(request).run_view(ctx.run_id) if ctx else None}
 
 
+@router.get("/compare")
+def compare(request: Request, a: str, b: str):
+    """Side by side comparison of two workload runs."""
+    from ..ops.compare import compare_runs   # local import keeps the router module light
+
+    d = db(request)
+    ra, rb = d.get_run(a), d.get_run(b)
+    if ra is None or rb is None:
+        raise HTTPException(404, "run not found")
+    if ra["type"] != "workload" or rb["type"] != "workload":
+        raise v.ValidationError({"b": "both runs must be workload runs"})
+    return compare_runs(manager(request).run_view(a), d.get_items(a), manager(request).run_view(b), d.get_items(b))
+
+
 @router.get("/{run_id}")
 def get_run(run_id: str, request: Request):
-    return _run_or_404(request, run_id)
+    run = _run_or_404(request, run_id)
+    if run["status"] == "interrupted":
+        run["leftovers"] = len(_leftovers(request, run_id))
+    return run
+
+
+def _leftovers(request: Request, run_id: str) -> dict[str, dict[str, Any]]:
+    """Recorded processes of an interrupted run that are still alive. Items whose process has ended
+    since the restart are updated, so the run page stops showing them as running."""
+    d = db(request)
+    items = [it for it in d.get_items(run_id) if it["state"] == "running"]
+    alive = alive_items(items)
+    gone = [dict(it, state="cancelled", ended_at=utcnow(), detail="ended after the backend restart; result unknown")
+            for it in items if it["pdb"] not in alive]
+    if gone:
+        d.update_items(run_id, gone)
+    return alive
+
+
+@router.get("/{run_id}/leftovers")
+def leftovers(run_id: str, request: Request):
+    run = _run_or_404(request, run_id)
+    if run["status"] != "interrupted":
+        return {"processes": []}
+    return {"processes": [{"pdb": k, **val} for k, val in sorted(_leftovers(request, run_id).items())]}
+
+
+@router.post("/{run_id}/kill-leftovers")
+async def kill_leftovers(run_id: str, request: Request):
+    run = _run_or_404(request, run_id)
+    if run["status"] != "interrupted":
+        raise HTTPException(409, "only interrupted runs can have leftover processes")
+    d = db(request)
+    alive = _leftovers(request, run_id)
+    items = [it for it in d.get_items(run_id) if it["pdb"] in alive]
+    result = await kill_groups(alive, items)
+    stopped = [dict(it, state="cancelled", ended_at=utcnow(), detail="stopped with Kill leftovers")
+               for it in items if it["pdb"] in result["stopped"]]
+    if stopped:
+        d.update_items(run_id, stopped)
+    d.audit(actor(request), "kill_leftovers", run_id, {"stopped": result["stopped"], "still_alive": result["still_alive"]})
+    return result
 
 
 @router.get("/{run_id}/items")

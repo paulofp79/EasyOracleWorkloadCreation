@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import validators as v
-from .api import env, pdbs, profiles, runs
+from .api import artifacts, env, pdbs, profiles, runs
 from .config import FRONTEND_DIST, STUB_DIR, Settings, load_settings
 from .db import Database
 from .engine.runs import RunManager
@@ -79,6 +79,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(profiles.router)
     app.include_router(pdbs.router)
     app.include_router(runs.router)
+    app.include_router(artifacts.router)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str):

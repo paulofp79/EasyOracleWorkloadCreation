@@ -135,14 +135,31 @@ class Database:
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         return self._run(self.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone())
 
-    def list_runs(self, limit: int = 50, type_: str | None = None) -> list[dict[str, Any]]:
+    def list_runs(self, limit: int = 50, type_: str | None = None, status: str | None = None,
+                  q: str | None = None, since: str | None = None, until: str | None = None,
+                  offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+        """Newest first. q matches the run id or any parameter text (e.g. a prefix or users=16)."""
+        where, args = [], []
         if type_:
-            rows = self.conn.execute("SELECT * FROM runs WHERE type = ? ORDER BY created_at DESC, id DESC LIMIT ?",
-                                     (type_, limit)).fetchall()
-        else:
-            rows = self.conn.execute("SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?",
-                                     (limit,)).fetchall()
-        return [self._run(r) for r in rows]
+            where.append("type = ?")
+            args.append(type_)
+        if status:
+            where.append("status = ?")
+            args.append(status)
+        if q:
+            where.append("(id LIKE ? OR params_json LIKE ?)")
+            args += [f"%{q}%", f"%{q}%"]
+        if since:
+            where.append("created_at >= ?")
+            args.append(since)
+        if until:
+            where.append("created_at < ?")
+            args.append(until)
+        clause = f"WHERE {' AND '.join(where)}" if where else ""
+        total = self.conn.execute(f"SELECT COUNT(*) FROM runs {clause}", args).fetchone()[0]
+        rows = self.conn.execute(f"SELECT * FROM runs {clause} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?",
+                                 (*args, limit, offset)).fetchall()
+        return [self._run(r) for r in rows], total
 
     def item_counts(self, run_id: str) -> dict[str, int]:
         rows = self.conn.execute("SELECT state, COUNT(*) n FROM run_items WHERE run_id = ? GROUP BY state",
@@ -168,22 +185,37 @@ class Database:
                 f"UPDATE run_items SET {cols} WHERE run_id = ? AND pdb = ?",
                 [(*(it.get(k) for k in self.ITEM_FIELDS), run_id, it["pdb"]) for it in items])
 
-    def mark_interrupted(self) -> list[str]:
-        """Startup recovery: runs left 'running' by a previous backend process."""
-        ids = [r["id"] for r in self.conn.execute("SELECT id FROM runs WHERE status = 'running'").fetchall()]
+    def running_run_ids(self) -> list[str]:
+        return [r["id"] for r in self.conn.execute("SELECT id FROM runs WHERE status = 'running'").fetchall()]
+
+    def mark_interrupted(self, run_id: str, alive: dict[str, int]) -> None:
+        """Startup recovery for a run left 'running' by a previous backend process.
+
+        alive: PDB -> pid of processes that are verifiably still running (they keep state 'running');
+        others that were in progress ended while the backend was down, with an unknown result."""
         now = utcnow()
         with self.tx():
-            for rid in ids:
+            self.conn.execute(
+                "UPDATE runs SET status = 'interrupted', ended_at = COALESCE(ended_at, ?), message = ? WHERE id = ?",
+                (now, "The backend stopped while this run was in progress"
+                      + (f"; {len(alive)} process group(s) are still running." if alive else "."), run_id))
+            self.conn.execute("UPDATE run_items SET state = 'not_started' WHERE run_id = ? AND state = 'pending'",
+                              (run_id,))
+            for pdb, pid in alive.items():
                 self.conn.execute(
-                    "UPDATE runs SET status = 'interrupted', ended_at = COALESCE(ended_at, ?), "
-                    "message = 'The backend stopped while this run was in progress.' WHERE id = ?", (now, rid))
-                self.conn.execute("UPDATE run_items SET state = 'not_started' WHERE run_id = ? AND state = 'pending'",
-                                  (rid,))
+                    "UPDATE run_items SET state = 'running', detail = ? WHERE run_id = ? AND pdb = ?",
+                    (f"still running after the backend restart (pid {pid}); no longer monitored", run_id, pdb))
+            rows = self.conn.execute(
+                "SELECT pdb, pid FROM run_items WHERE run_id = ? AND state IN ('checking', 'running')",
+                (run_id,)).fetchall()
+            for r in rows:
+                if r["pdb"] in alive:
+                    continue
                 self.conn.execute(
-                    "UPDATE run_items SET state = 'cancelled', detail = 'backend stopped while this was running"
-                    "' || CASE WHEN pid IS NOT NULL THEN ' (pid ' || pid || ')' ELSE '' END "
-                    "WHERE run_id = ? AND state IN ('checking', 'running')", (rid,))
-        return ids
+                    "UPDATE run_items SET state = 'cancelled', ended_at = COALESCE(ended_at, ?), detail = ? "
+                    "WHERE run_id = ? AND pdb = ?",
+                    (now, "ended while the backend was down; result unknown"
+                          + (f" (pid {r['pid']})" if r["pid"] else ""), run_id, r["pdb"]))
 
     # ---- per-PDB state kept across runs ----------------------------------------------------
     def upsert_last_check(self, pdb: str, status: str, detail: str, instance: str | None, run_id: str) -> None:

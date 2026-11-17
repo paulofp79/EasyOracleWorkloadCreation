@@ -129,7 +129,22 @@ def arg_value(argv, flag):
         return None
 
 
+_STDOUT_OK = True
+
+
 def out(*lines):
-    for line in lines:
-        sys.stdout.write(line + "\n")
-    sys.stdout.flush()
+    """Write to stdout; if the reader is gone (the backend was killed), keep running silently,
+    as Java's System.out does: a broken pipe sets an error flag but does not stop charbench."""
+    global _STDOUT_OK
+    if not _STDOUT_OK:
+        return
+    try:
+        for line in lines:
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+    except (BrokenPipeError, OSError):
+        _STDOUT_OK = False
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass

@@ -21,6 +21,7 @@ from ..db import Database, utcnow
 from ..ops.base import PlanError
 from ..redact import Redactor
 from .events import EventBus
+from .leftovers import alive_items, proc_table
 from .runner import ProcessRunner
 
 log = logging.getLogger("orchestrator.runs")
@@ -141,9 +142,16 @@ class RunManager:
         self._lock = asyncio.Lock()
 
     def recover(self) -> list[str]:
-        ids = self.db.mark_interrupted()
+        """Runs left 'running' by a previous backend process become 'interrupted'. Processes that are
+        verifiably still alive keep state 'running' (Kill leftovers stops them); logs stay untouched."""
+        ids = self.db.running_run_ids()
+        table = proc_table()
         for rid in ids:
-            log.warning("run %s was running when the backend stopped; marked interrupted", rid)
+            items = [it for it in self.db.get_items(rid) if it["state"] in ("checking", "running")]
+            alive = alive_items(items, table)
+            self.db.mark_interrupted(rid, {pdb: info["pid"] for pdb, info in alive.items()})
+            log.warning("run %s was running when the backend stopped; marked interrupted (%d process group(s) "
+                        "still alive)", rid, len(alive))
         return ids
 
     def run_view(self, run_id: str) -> dict[str, Any] | None:

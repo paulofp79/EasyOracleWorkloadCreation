@@ -6,10 +6,10 @@ everything `reference/*.sh` does, from a browser, with live monitoring and histo
 
 - Requirements: [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md)
 - Design: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- Status: **M3** — profiles, environment check, PDB inventory (`gv$pdbs`), parallel SOE connection
-  check with live tile grid, stop-all, run history, create/drop PDBs (TDE toggle, guarded drops) and
-  SOE load (pre-flight, CON_UID markers, sliding window, keep-going, force, retry failed). Workload (M4)
-  follows.
+- Status: **M4** — profiles, environment check, PDB inventory, parallel SOE connection check,
+  create/drop PDBs, SOE load (resume, keep-going, retry) and the workload: check, one charbench per PDB
+  started at once, live monitoring with per-PDB logs, log error scan, Stop all. History/artifacts (M5)
+  and hardening (M6) follow.
 
 ## Quick start in simulation mode (no Oracle needed)
 

@@ -61,6 +61,9 @@ def main():
             "Connecting to %s as soe, %d users, runtime %s" % (cs, users, rt),
             "Time     Users       TPM      TPS     Errors   NCR   UCD   BP    OP    PO    BO    SQ    WQ    WA")
     total = runtime_seconds(rt) if scen != "long" else 10 ** 9
+    override = sim.SCENARIO.get("pdb_scenarios", {}).get(pdb, {}).get("workload_seconds")
+    if override is not None:
+        total = float(override)
     interval = float(sim.SCENARIO.get("charbench", {}).get("line_interval", 1.0))
     start = time.time()
     errors = 0

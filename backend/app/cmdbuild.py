@@ -17,3 +17,14 @@ def oewizard_argv(oewizard: str, connect: str, soe_password: str, scale: str, th
 def display(argv: list[str]) -> str:
     """Shell-quoted command with -p / -dbap values masked."""
     return " ".join(shlex.quote(a) for a in mask_argv(argv))
+
+
+def charbench_argv(charbench: str, connect: str, soe_password: str, config: str, users: int,
+                   disable_txns: str, runtime: str, results: str) -> list[str]:
+    """run_charbench_all_pdbs.sh workload command; -di is omitted when nothing is disabled."""
+    argv = [charbench, "-cs", connect, "-u", "soe", "-p", soe_password, "-c", config,
+            "-v", "users,tpm,tps,errs,vresp", "-intermin", "0", "-intermax", "0", "-min", "0", "-max", "0",
+            "-uc", str(users)]
+    if disable_txns:
+        argv += ["-di", disable_txns]
+    return argv + ["-rt", runtime, "-r", results]

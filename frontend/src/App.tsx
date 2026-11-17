@@ -13,6 +13,7 @@ import Pdbs from "./pages/Pdbs";
 import Profiles from "./pages/Profiles";
 import RunDetail from "./pages/RunDetail";
 import Runs from "./pages/Runs";
+import Workload from "./pages/Workload";
 
 const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/", label: "Dashboard" },
@@ -20,7 +21,7 @@ const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/create", label: "Create PDBs" },
   { to: "/load", label: "Load SOE" },
   { to: "/check", label: "Check connections" },
-  { to: "/workload", label: "Run workload", milestone: "M4" },
+  { to: "/workload", label: "Run workload" },
   { to: "/runs", label: "Runs" },
   { to: "/profiles", label: "Profiles" },
   { to: "/environment", label: "Environment" },
@@ -120,6 +121,7 @@ export default function App() {
             <Route path="/create" element={<CreatePdbs />} />
             <Route path="/drop" element={<DropPdbs />} />
             <Route path="/load" element={<LoadSoe />} />
+            <Route path="/workload" element={<Workload />} />
             <Route path="/runs" element={<Runs />} />
             <Route path="/runs/:id" element={<RunDetail key={location.pathname} />} />
             {NAV.filter((n) => n.milestone).map((n) => (

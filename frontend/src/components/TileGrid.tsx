@@ -8,16 +8,18 @@ const Tile = memo(function Tile({ item, selected, onSelect }: {
   const s = ITEM_STATE[item.state];
   const detail = item.detail || item.check_detail || "";
   const num = item.pdb.slice(-3);
+  const errs = item.error_count ?? 0;
+  const errText = errs ? `, ${errs} error line(s) in the log: ${item.first_error ?? ""}` : "";
   return (
     <button
       type="button"
-      className={`tile st-${item.state}${selected ? " tile-selected" : ""}`}
-      title={`${item.pdb}: ${s.label}${detail ? ` — ${detail}` : ""}`}
-      aria-label={`${item.pdb}, ${s.label}${detail ? `, ${detail}` : ""}`}
+      className={`tile st-${item.state}${selected ? " tile-selected" : ""}${errs ? " tile-errors" : ""}`}
+      title={`${item.pdb}: ${s.label}${detail ? ` — ${detail}` : ""}${errText}`}
+      aria-label={`${item.pdb}, ${s.label}${detail ? `, ${detail}` : ""}${errText}`}
       aria-pressed={selected}
       onClick={() => onSelect(item.pdb)}
     >
-      <span className="tile-num">{num}</span>
+      <span className="tile-num">{num}{errs ? <span className="tile-err" aria-hidden="true">!</span> : null}</span>
       <span className="tile-state">
         <span aria-hidden="true">{s.icon}</span>
         {s.short}

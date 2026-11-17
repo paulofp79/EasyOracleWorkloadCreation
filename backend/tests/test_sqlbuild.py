@@ -181,3 +181,32 @@ def test_display_masks_both_passwords():
     shown = display(oewizard_argv("/x/oewizard", "//h:1/s", "pw1", "1", 4, "pw2", "T"))
     assert "pw1" not in shown and "pw2" not in shown and shown.count("'********'") == 2
     assert "-dba 'sys as sysdba'" in shown
+
+
+# ---- workload (run_charbench_all_pdbs.sh) -----------------------------------------------------------
+from app.cmdbuild import charbench_argv  # noqa: E402
+from app.logscan import scan_text  # noqa: E402
+
+RUN_SH = (REF / "run_charbench_all_pdbs.sh").read_text()
+
+
+@pytest.mark.parametrize("disable", ["SQ,WQ,WA", ""])
+def test_charbench_argv_matches_script(disable):
+    m = re.search(r'setsid "\$CHARBENCH" \\\n(.*?)> "\$RUN_DIR/\$\{pdb\}-charbench.log"', RUN_SH, re.S)
+    text = m.group(1).replace("\\\n", " ")
+    text = text.replace('${di_args[@]+"${di_args[@]}"}', f"-di {disable}" if disable else "")
+    subst = {"$service": "//scan:1521/pdbpp_001", "$SOE_PASSWORD": "pw", "$CONFIG": "/sb/configs/SOE.xml",
+             "$USERS": "8", "$RUNTIME": "00:30", "$RUN_DIR/${pdb}-results.xml": "/runs/r1/PDBPP_001-results.xml"}
+    expected = ["/sb/bin/charbench"] + [subst.get(t, t) for t in shlex.split(text)]
+    got = charbench_argv("/sb/bin/charbench", "//scan:1521/pdbpp_001", "pw", "/sb/configs/SOE.xml", 8, disable,
+                         "00:30", "/runs/r1/PDBPP_001-results.xml")
+    assert got == expected
+
+
+def test_error_regex_matches_script():
+    assert re.search(r"ERR_REGEX='(.*)'", RUN_SH).group(1) == \
+        "ORA-[0-9]{5}|TNS-[0-9]{5}|SQLException|Exception|Connection refused|Connection reset"
+    r = scan_text(["12:00:01 8 100 2 0", "java.sql.SQLException: ORA-00942: table or view does not exist",
+                   "ORA-1234 short", "TNS-12541:\tno listener", "Connection reset by peer"])
+    assert r.error_lines == 3 and r.first_error.startswith("java.sql.SQLException: ORA-00942")
+    assert scan_text(["x" * 300 + " Exception"]).first_error == "x" * 150

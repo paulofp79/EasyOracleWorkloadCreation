@@ -131,6 +131,9 @@ export interface Plan {
   already_loaded?: string[];
   to_load?: string[];
   command_preview?: string;
+  load?: { processes: number; sessions: number; heavy: boolean; message: string };
+  runtime_s?: number;
+  launch_s?: number;
   warnings: string[];
   example_connect?: string;
   equivalent_command: string;

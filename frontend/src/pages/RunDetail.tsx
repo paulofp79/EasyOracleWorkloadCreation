@@ -14,9 +14,13 @@ const RETRY_SECRETS: Record<string, [string, string][]> = {
   check: [["soe_password", "SOE password"]],
   load: [["soe_password", "SOE password"], ["sys_password", "SYS password"]],
 };
+const PHASE: Record<string, string> = {
+  preflight: "pre-flight", check: "connection check", launch: "launching workloads", run: "workloads running",
+  summary: "scanning logs", drop: "dropping", create: "creating", load: "loading",
+};
 const SUMMARY_LABELS: Record<string, string> = {
   loaded: "loaded", created: "created", dropped: "dropped", skipped: "skipped", existing: "existed before",
-  checked: "checked", ok: "OK", failed: "failed", not_started: "not started", peak_running: "peak concurrency",
+  checked: "checked", started: "workloads started", ok: "OK", failed: "failed", with_errors: "with error text", not_started: "not started", peak_running: "peak concurrency",
   elapsed_s: "elapsed (s)",
 };
 
@@ -68,6 +72,7 @@ function Drawer({ runId, item, live, onClose }: { runId: string; item: RunItem; 
     ["Instance", item.instance ?? "—"],
     ["Detail", item.detail ?? "—"],
     ["Exit code", item.exit_code ?? "—"],
+    ["Error lines", item.error_count != null ? `${item.error_count}${item.first_error ? ` — ${item.first_error}` : ""}` : "—"],
     ["PID / PGID", item.pid ? `${item.pid} / ${item.pgid}` : "—"],
     ["Started", fmtTime(item.started_at)],
     ["Duration", item.started_at ? fmtDuration(secondsBetween(item.started_at, item.ended_at)) : "—"],
@@ -153,6 +158,7 @@ export default function RunDetail() {
 
       <div className="runbar card">
         <RunBadge status={run.status} />
+        {live && run.phase && <span className="phase">phase: {PHASE[run.phase] ?? run.phase}</span>}
         <span>{completed} / {total} completed</span>
         <span className={failed ? "text-fail" : "muted"}>{failed} failed</span>
         {stopped > 0 && (
@@ -209,7 +215,7 @@ export default function RunDetail() {
       ) : (
         <table className="grid-table dense">
           <thead>
-            <tr><th>PDB</th><th>State</th><th>Instance</th><th>Detail</th><th>Exit</th><th>Duration</th></tr>
+            <tr><th>PDB</th><th>State</th><th>Instance</th><th>Detail</th><th>Exit</th><th>Errors</th><th>Duration</th></tr>
           </thead>
           <tbody>
             {shown.map((it) => (
@@ -219,6 +225,7 @@ export default function RunDetail() {
                 <td className="mono">{it.instance ?? ""}</td>
                 <td className="mono small">{it.detail ?? (it.check_status === "OK" ? "" : it.check_detail) ?? ""}</td>
                 <td className="mono">{it.exit_code ?? ""}</td>
+                <td className={`mono${it.error_count ? " text-fail" : ""}`} title={it.first_error ?? undefined}>{it.error_count ?? ""}</td>
                 <td className="mono">{it.started_at ? fmtDuration(secondsBetween(it.started_at, it.ended_at)) : ""}</td>
               </tr>
             ))}
@@ -241,6 +248,26 @@ export default function RunDetail() {
             </tbody>
           </table>
           {run.summary.failed_more > 0 && <p className="muted small">… and {run.summary.failed_more} more (filter by “failed”).</p>}
+        </section>
+      )}
+
+      {!live && run.summary && run.summary.error_pdbs?.length > 0 && (
+        <section className="card" style={{ marginTop: "1rem" }}>
+          <h2>Error text in charbench logs ({run.summary.with_errors} PDB(s))</h2>
+          <p className="muted small">Informational: exit code 0 does not prove the database returned no errors.</p>
+          <table className="grid-table dense">
+            <thead><tr><th>PDB</th><th>Lines</th><th>First error line</th></tr></thead>
+            <tbody>
+              {run.summary.error_pdbs.map((e: { pdb: string; lines: number; first: string }) => (
+                <tr key={e.pdb}>
+                  <td><button className="linkbtn mono" onClick={() => setSelected(e.pdb)}>{e.pdb}</button></td>
+                  <td className="mono">{e.lines}</td>
+                  <td className="mono small">{e.first}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {run.summary.error_more > 0 && <p className="muted small">… and {run.summary.error_more} more (table view, Errors column).</p>}
         </section>
       )}
 

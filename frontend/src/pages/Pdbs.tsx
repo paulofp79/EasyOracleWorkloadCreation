@@ -98,6 +98,8 @@ export default function Pdbs() {
                 onClick={() => navigate("/check", { state: { pdbs: selectedNames } })}>Check connections</button>
         <button className="btn" disabled={!selected.size}
                 onClick={() => navigate("/load", { state: { pdbs: selectedNames } })}>Load SOE</button>
+        <button className="btn" disabled={!selected.size}
+                onClick={() => navigate("/workload", { state: { pdbs: selectedNames } })}>Run workload</button>
         <button className="btn btn-danger" disabled={!selected.size}
                 onClick={() => navigate("/drop", { state: { pdbs: selectedNames } })}>Drop…</button>
         <button className="btn btn-ghost-inline" disabled={!selected.size} onClick={() => setSelected(new Set())}>Clear</button>

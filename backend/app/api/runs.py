@@ -15,8 +15,10 @@ from ..db import utcnow
 from ..engine.leftovers import alive_items, kill_groups
 from ..engine.runs import Conflict, RunManager
 from ..ops.base import PlanError
+from ..sysdba import SysPasswordMissing
 from ..ops.registry import OPERATIONS, RETRYABLE
 from .deps import actor, db, settings
+from .session import session_secrets
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -67,15 +69,18 @@ async def create_run(body: RunIn, request: Request):
         if not retry:
             raise v.ValidationError({"retry_of": "nothing to retry: every PDB finished OK or was skipped"})
         params = {**old["params"], "pdbs": retry}
-        profile = None
+        profile = d.active_profile()        # only fills fields that did not exist when the run was made
     else:
         profile = d.get_profile(body.profile_id) if body.profile_id is not None else d.active_profile()
         if body.profile_id is not None and profile is None:
             raise v.ValidationError({"profile_id": "profile not found"})
-    op = op_cls.from_request(settings(request), d, params, body.secrets, profile, need_secrets=not body.dry_run)
+    op = op_cls.from_request(settings(request), d, params, body.secrets, profile, need_secrets=not body.dry_run,
+                             session=session_secrets(request))
     if body.dry_run:
         try:
             return {"plan": await op.plan(), "params": op.params}
+        except SysPasswordMissing as exc:
+            return JSONResponse({"error": str(exc), "need_sys_password": True}, status_code=428)
         except PlanError as exc:
             raise HTTPException(502, str(exc)) from exc
     try:

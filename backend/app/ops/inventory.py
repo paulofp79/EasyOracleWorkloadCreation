@@ -8,9 +8,10 @@ from ..config import Settings
 from ..db import Database, utcnow
 from ..engine.runner import ProcessRunner, ToolNotFound
 from ..parsing import PdbRow, first_error, parse_inventory, parse_preflight
+from ..redact import Redactor
 from ..sqlbuild import PDB_TOKEN, inventory_sql, preflight_sql
+from ..sysdba import SysdbaConn
 
-SYSDBA = ["sqlplus", "-L", "-s", "/", "as", "sysdba"]
 QUERY_TIMEOUT = 120
 FULL_OUTPUT = 1_000_000      # keep every line: 999 PDBs x many instances must not be cut to the tail
 
@@ -24,10 +25,14 @@ def numbered(prefix: str) -> re.Pattern[str]:
     return re.compile(rf"{re.escape(prefix.upper())}_[0-9]{{3}}")
 
 
-async def query_inventory(settings: Settings, prefix: str) -> dict[str, PdbRow]:
-    runner = ProcessRunner(settings.tool_env())
+def _runner(settings: Settings, conn: SysdbaConn) -> ProcessRunner:
+    return ProcessRunner(settings.tool_env(), Redactor([conn.password] if conn.password else []))
+
+
+async def query_inventory(settings: Settings, prefix: str, conn: SysdbaConn) -> dict[str, PdbRow]:
+    runner = _runner(settings, conn)
     try:
-        r = await runner.run(SYSDBA, stdin_text=inventory_sql(prefix), timeout=QUERY_TIMEOUT,
+        r = await runner.run(conn.argv(), stdin_text=conn.stdin(inventory_sql(prefix)), timeout=QUERY_TIMEOUT,
                              tail_lines=FULL_OUTPUT)
     except ToolNotFound as exc:
         raise InventoryError(str(exc)) from exc
@@ -39,12 +44,15 @@ async def query_inventory(settings: Settings, prefix: str) -> dict[str, PdbRow]:
     return {k: v for k, v in parse_inventory(r.output).items() if rx.fullmatch(k)}
 
 
-async def query_preflight(settings: Settings, prefix: str,
+async def query_preflight(settings: Settings, prefix: str, conn: SysdbaConn,
                           runner: ProcessRunner | None = None) -> dict[str, tuple[str, int]]:
     """The scripts' pre-flight query: {name: (con_uid, instances open READ WRITE)}."""
-    runner = runner or ProcessRunner(settings.tool_env())
-    r = await runner.run(SYSDBA, stdin_text=preflight_sql(prefix), timeout=QUERY_TIMEOUT,
-                         tail_lines=FULL_OUTPUT)
+    runner = runner or _runner(settings, conn)
+    try:
+        r = await runner.run(conn.argv(), stdin_text=conn.stdin(preflight_sql(prefix)), timeout=QUERY_TIMEOUT,
+                             tail_lines=FULL_OUTPUT)
+    except ToolNotFound as exc:
+        raise InventoryError(str(exc)) from exc
     if r.timed_out:
         raise InventoryError(f"pre-flight query timed out after {QUERY_TIMEOUT}s")
     if r.exit_code != 0:
@@ -53,8 +61,8 @@ async def query_preflight(settings: Settings, prefix: str,
     return {k: v for k, v in parse_preflight(r.output).items() if rx.fullmatch(k)}
 
 
-async def inventory(settings: Settings, db: Database, prefix: str) -> dict[str, Any]:
-    live = await query_inventory(settings, prefix)
+async def inventory(settings: Settings, db: Database, prefix: str, conn: SysdbaConn) -> dict[str, Any]:
+    live = await query_inventory(settings, prefix, conn)
     checks = db.last_checks(prefix)
     markers = db.soe_markers(prefix)
     instances: dict[int, str] = {}

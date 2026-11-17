@@ -18,10 +18,14 @@ from ..engine.runner import ToolNotFound
 from ..parsing import first_error
 from ..redact import MASK
 from ..sqlbuild import create_pdb_sql, drop_pdb_sql
-from .base import Operation, PlanError
-from .inventory import SYSDBA, InventoryError, query_preflight
+from .base import Operation, PlanError, SysPasswordMissing, needs_sys
+from .inventory import InventoryError, query_preflight
 
 SHOW_NAMES = 20
+# SCAN host/port and the CDB root service: only used when cdb_connect is remote
+REMOTE_CONN = {"scan_host": "scan_host", "scan_port": "scan_port", "cdb_connect": "cdb_connect",
+               "cdb_service": "cdb_service"}
+REMOTE_CONN_DEFAULTS = {k: k for k in REMOTE_CONN}
 
 
 def drop_token(pdbs: list[str], live: dict[str, tuple[str, int]]) -> str:
@@ -36,7 +40,7 @@ def names(pdbs: list[str]) -> str:
 
 async def live_state(op: Operation, runner=None) -> dict[str, tuple[str, int]]:
     try:
-        return await query_preflight(op.settings, op.params["prefix"], runner)
+        return await query_preflight(op.settings, op.params["prefix"], op.sysdba(), runner)
     except (InventoryError, ToolNotFound) as exc:
         raise PlanError(f"Could not read gv$pdbs: {exc}") from exc
 
@@ -45,7 +49,9 @@ async def drop_one(ctx, pdb: str, rac: bool) -> bool:
     """Close (where open) and drop one PDB including datafiles. Returns True on success."""
     ctx.set_item(pdb, state="running", started_at=utcnow(), ended_at=None,
                  detail="dropping: close immediate, drop including datafiles")
-    r = await ctx.runner.run(SYSDBA, stdin_text=drop_pdb_sql(pdb, rac), log_path=ctx.run_dir / f"{pdb}-drop.log",
+    conn = ctx.op.sysdba()
+    r = await ctx.runner.run(conn.argv(), stdin_text=conn.stdin(drop_pdb_sql(pdb, rac)),
+                             log_path=ctx.run_dir / f"{pdb}-drop.log",
                              on_start=lambda res: ctx.set_item(pdb, pid=res.pid, pgid=res.pgid,
                                                                proc_starttime=res.starttime))
     if r.cancelled:
@@ -64,17 +70,20 @@ async def drop_one(ctx, pdb: str, rac: bool) -> bool:
 class CreatePdbs(Operation):
     type = "create"
     PARAMS = {"prefix": "prefix", "first": "pdb_number", "last": "pdb_number", "rac_cdb": "boolean",
-              "use_wallet": "boolean", "log_dir": "abs_path"}
+              "use_wallet": "boolean", "log_dir": "abs_path", **REMOTE_CONN}
     OPTIONAL = {"existing_action": "existing_action", "confirm_text": "confirm_delete", "confirm_token": "confirm_token"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "create_first", "last": "create_last", "rac_cdb": "rac_cdb",
-                        "log_dir": "log_dir"}          # use_wallet deliberately has no default
-    SECRETS = {"pdb_admin_password": "quoted_password", "wallet_password": "quoted_password"}
+                        "log_dir": "log_dir", **REMOTE_CONN_DEFAULTS}   # use_wallet deliberately has no default
+    SECRETS = {"pdb_admin_password": "quoted_password", "wallet_password": "quoted_password",
+               "sys_password": "password"}
 
     @classmethod
     def secret_spec(cls, params):
         spec = {"pdb_admin_password": "quoted_password"}
         if params.get("use_wallet"):
             spec["wallet_password"] = "quoted_password"
+        if needs_sys(params):
+            spec["sys_password"] = "password"
         return spec
 
     @classmethod
@@ -171,6 +180,7 @@ class CreatePdbs(Operation):
                 ctx.set_item(pdb, state="pending", detail="dropped; waiting to be created")
 
         ctx.update_run(phase="create")
+        conn = ctx.op.sysdba()
         wallet = ctx.op.secrets.get("wallet_password") if p["use_wallet"] else None
         total = len(pdbs) - len(skip)
         ctx.log(f"creating {total} PDB(s) one at a time ({'RAC' if p['rac_cdb'] else 'single instance'}, "
@@ -182,7 +192,8 @@ class CreatePdbs(Operation):
                 break
             ctx.set_item(pdb, state="running", started_at=utcnow(), ended_at=None, detail="creating and opening")
             r = await ctx.runner.run(
-                SYSDBA, stdin_text=create_pdb_sql(pdb, ctx.op.secrets["pdb_admin_password"], p["rac_cdb"], wallet),
+                conn.argv(), stdin_text=conn.stdin(
+                    create_pdb_sql(pdb, ctx.op.secrets["pdb_admin_password"], p["rac_cdb"], wallet)),
                 log_path=ctx.run_dir / f"{pdb}-create.log",
                 on_start=lambda res, pdb=pdb: ctx.set_item(pdb, pid=res.pid, pgid=res.pgid,
                                                            proc_starttime=res.starttime))
@@ -215,10 +226,15 @@ class CreatePdbs(Operation):
 class DropPdbs(Operation):
     type = "drop"
     PARAMS = {"prefix": "prefix", "first": "pdb_number", "last": "pdb_number", "rac_cdb": "boolean",
-              "log_dir": "abs_path"}
+              "log_dir": "abs_path", **REMOTE_CONN}
     OPTIONAL = {"pdbs": "pdb_names", "confirm_text": "confirm_delete", "confirm_token": "confirm_token"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "create_first", "last": "create_last", "rac_cdb": "rac_cdb",
-                        "log_dir": "log_dir"}
+                        "log_dir": "log_dir", **REMOTE_CONN_DEFAULTS}
+    SECRETS = {"sys_password": "password"}
+
+    @classmethod
+    def secret_spec(cls, params):
+        return {"sys_password": "password"} if needs_sys(params) else {}
 
     @classmethod
     def check(cls, params, final=True):

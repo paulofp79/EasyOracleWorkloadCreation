@@ -11,10 +11,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import validators as v
-from .api import artifacts, env, pdbs, profiles, runs
+from .api import artifacts, env, pdbs, profiles, runs, session
 from .config import FRONTEND_DIST, STUB_DIR, Settings, load_settings
 from .db import Database
 from .engine.runs import RunManager
+from .sessions import SessionStore
 
 log = logging.getLogger("orchestrator")
 
@@ -32,6 +33,7 @@ def seed_profiles(db: Database, settings: Settings) -> None:
             charbench_path=str(STUB_DIR / "charbench"),
             config_xml=str(STUB_DIR / "sim-swingbench" / "configs" / "SOE_Server_Side_V2.xml"),
             log_dir=str(settings.sim_root / "logs"),
+            cdb_service="simcdb.example.com",
             load_first=1, load_last=250,
         )
     db.create_profile(name, v.validate_profile_params(params), active=True)
@@ -46,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         seed_profiles(db, settings)
         app.state.db = db
         app.state.runs = RunManager(settings, db)
+        app.state.sessions = SessionStore()
         app.state.runs.recover()
         log.info("mode=%s db=%s", settings.mode, settings.db_path)
         yield
@@ -80,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pdbs.router)
     app.include_router(runs.router)
     app.include_router(artifacts.router)
+    app.include_router(session.router)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str):

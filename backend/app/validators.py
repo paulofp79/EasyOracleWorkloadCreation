@@ -224,6 +224,19 @@ def confirm_token(v: Any) -> str:
     return v
 
 
+def cdb_connect(v: Any) -> str:
+    if v not in ("local", "remote"):
+        raise RuleError("must be local or remote")
+    return v
+
+
+def cdb_service(v: Any) -> str:
+    s = "" if v is None else _text(v)
+    if not RE_SUFFIX.fullmatch(s) or len(s) > 200:
+        raise RuleError("may contain only letters, digits, '.', '_' and '-'")
+    return s
+
+
 def confirm_delete(v: Any) -> str:
     if v != "DELETE":
         raise RuleError("type DELETE to confirm")
@@ -235,6 +248,8 @@ RULES: dict[str, Callable[[Any], Any]] = {
     "existing_action": existing_action,
     "confirm_token": confirm_token,
     "confirm_delete": confirm_delete,
+    "cdb_connect": cdb_connect,
+    "cdb_service": cdb_service,
     "prefix": prefix, "pdb_number": pdb_number, "positive_int": positive_int,
     "scan_host": scan_host, "scan_port": scan_port, "service_suffix": service_suffix,
     "scale": scale, "tablespace": tablespace, "runtime": runtime, "disable_txns": disable_txns,
@@ -254,6 +269,8 @@ PROFILE_FIELDS: dict[str, tuple[str, Any]] = {
     "scan_host": ("scan_host", "scaqaq01-scan1.us.oracle.com"),
     "scan_port": ("scan_port", 1521),
     "service_suffix": ("service_suffix", ""),
+    "cdb_connect": ("cdb_connect", "local"),
+    "cdb_service": ("cdb_service", ""),
     "rac_cdb": ("boolean", True),
     "scale": ("scale", "0.1"),
     "threads": ("positive_int", 16),
@@ -281,6 +298,11 @@ def profile_defaults() -> dict[str, Any]:
     return {k: d for k, (_, d) in PROFILE_FIELDS.items()}
 
 
+def profile_params(profile: dict[str, Any] | None) -> dict[str, Any]:
+    """Stored profile parameters completed with defaults for fields added after the profile was saved."""
+    return {**profile_defaults(), **((profile or {}).get("params") or {})}
+
+
 def validate(data: dict[str, Any], spec: dict[str, str], *, partial: bool = False) -> dict[str, Any]:
     """Validate data against {field: rule}. Unknown fields are errors.
 
@@ -304,6 +326,9 @@ def validate(data: dict[str, Any], spec: dict[str, str], *, partial: bool = Fals
     for first, last in RANGE_PAIRS:
         if first in clean and last in clean and clean[first] > clean[last]:
             errors[last] = f"must be greater than or equal to {first.replace('_', ' ')}"
+    if clean.get("cdb_connect") == "remote" and "cdb_service" in spec and not clean.get("cdb_service") \
+            and "cdb_service" not in errors:
+        errors["cdb_service"] = "is required for a remote CDB connection (the CDB root service name)"
     if errors:
         raise ValidationError(errors)
     return clean

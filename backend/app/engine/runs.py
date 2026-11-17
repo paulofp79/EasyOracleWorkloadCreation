@@ -19,6 +19,7 @@ from typing import Any
 from ..config import Settings
 from ..db import Database, utcnow
 from ..ops.base import PlanError
+from ..sysdba import SysPasswordMissing
 from ..redact import Redactor
 from .events import EventBus
 from .leftovers import alive_items, proc_table
@@ -199,7 +200,7 @@ class RunManager:
             status, summary = await ctx.op.execute(ctx)
         except asyncio.CancelledError:
             status, message = "cancelled", "The run task was cancelled."
-        except PlanError as exc:                 # e.g. gv$pdbs could not be read: show the database's reason
+        except (PlanError, SysPasswordMissing) as exc:   # e.g. gv$pdbs unreadable: show the reason
             status, message = "failed", str(exc)
         except Exception as exc:  # noqa: BLE001 - report, never crash the server
             ref = uuid.uuid4().hex[:8]

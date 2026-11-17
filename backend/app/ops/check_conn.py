@@ -11,7 +11,7 @@ from ..engine.runner import ToolNotFound
 from ..naming import pdb_connect_string
 from ..parsing import parse_check
 from ..sqlbuild import check_sql
-from .base import Operation, PlanError
+from .base import Operation, PlanError, SysPasswordMissing
 from .inventory import InventoryError, query_preflight
 
 NOLOG = ["sqlplus", "-L", "-s", "/nolog"]
@@ -20,7 +20,8 @@ CONN_DIR = "connection-check"
 SHOW_FAILED = 20
 
 CONNECTION_PARAMS = {"prefix": "prefix", "scan_host": "scan_host", "scan_port": "scan_port",
-                     "service_suffix": "service_suffix", "log_dir": "abs_path"}
+                     "service_suffix": "service_suffix", "log_dir": "abs_path",
+                     "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
 CHECK_PARAMS = {"check_timeout": "positive_int", "check_parallel": "positive_int"}
 
 
@@ -84,8 +85,14 @@ class CheckConnections(Operation):
     OPTIONAL = {"pdbs": "pdb_names"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "workload_first", "last": "workload_last",
                         "scan_host": "scan_host", "scan_port": "scan_port", "service_suffix": "service_suffix",
-                        "check_timeout": "check_timeout", "check_parallel": "check_parallel", "log_dir": "log_dir"}
-    SECRETS = {"soe_password": "quoted_password"}
+                        "check_timeout": "check_timeout", "check_parallel": "check_parallel", "log_dir": "log_dir",
+                        "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
+    # SYS is only used by the plan (existence pre-check); the check itself logs in as SOE.
+    SECRETS = {"soe_password": "quoted_password", "sys_password": "password"}
+
+    @classmethod
+    def secret_spec(cls, params):
+        return {"soe_password": "quoted_password"}
 
     def equivalent_command(self) -> str:
         p = self.params
@@ -102,16 +109,20 @@ class CheckConnections(Operation):
 
     async def plan(self) -> dict[str, Any]:
         pdbs = self.targets()
+        unverified = None
         try:
-            live = await query_preflight(self.settings, self.params["prefix"])
+            live = await query_preflight(self.settings, self.params["prefix"], self.sysdba())
+        except SysPasswordMissing:
+            live, unverified = None, "PDB existence not verified: no SYS password in this browser session."
         except (InventoryError, ToolNotFound) as exc:
             raise PlanError(f"Could not read gv$pdbs: {exc}") from exc
-        missing = [p for p in pdbs if p not in live]
-        not_open = [p for p in pdbs if p in live and live[p][1] < 1]
+        missing = [p for p in pdbs if live is not None and p not in live]
+        not_open = [p for p in pdbs if live is not None and p in live and live[p][1] < 1]
         return {
             "type": self.type, "pdbs": pdbs, "count": len(pdbs),
             "missing": missing, "not_open": not_open,
-            "warnings": ([f"{len(missing)} PDB(s) do not exist and will fail the check"] if missing else []) +
+            "warnings": ([unverified] if unverified else []) +
+                        ([f"{len(missing)} PDB(s) do not exist and will fail the check"] if missing else []) +
                         ([f"{len(not_open)} PDB(s) are not open READ WRITE and will fail the check"]
                          if not_open else []),
             "example_connect": connect_for(self.params, pdbs[0]),

@@ -8,10 +8,19 @@ from .. import validators as v
 from ..config import Settings
 from ..db import Database
 from ..naming import pdb_range
+from ..sysdba import SysdbaConn, SysPasswordMissing
 
 
 class PlanError(Exception):
     """The request is valid but cannot run (e.g. the database said no). Shown to the user as is."""
+
+
+
+def needs_sys(params: dict[str, Any]) -> bool:
+    return params.get("cdb_connect") == "remote"
+
+
+__all__ = ["Operation", "PlanError", "needs_sys", "SysPasswordMissing"]
 
 
 class Operation:
@@ -36,12 +45,14 @@ class Operation:
     # ---- construction / validation -------------------------------------------------------
     @classmethod
     def from_request(cls, settings: Settings, db: Database, raw_params: dict[str, Any],
-                     raw_secrets: dict[str, Any], profile: dict[str, Any] | None, need_secrets: bool) -> "Operation":
+                     raw_secrets: dict[str, Any], profile: dict[str, Any] | None, need_secrets: bool,
+                     session: dict[str, str] | None = None) -> "Operation":
         merged: dict[str, Any] = {}
         if profile:
+            pparams = v.profile_params(profile)
             for field, pfield in cls.PROFILE_DEFAULTS.items():
-                if pfield in profile["params"]:
-                    merged[field] = profile["params"][pfield]
+                if pfield in pparams:
+                    merged[field] = pparams[pfield]
         merged.update({k: val for k, val in raw_params.items() if val is not None})
         errors: dict[str, str] = {}
         params: dict[str, Any] = {}
@@ -58,12 +69,21 @@ class Operation:
         except v.ValidationError as exc:
             errors.update(exc.errors)
         secrets: dict[str, str] = {}
+        # The SYS password of the browser session fills in when the request does not carry one.
+        if session and session.get("sys_password") and "sys_password" in cls.SECRETS \
+                and not raw_secrets.get("sys_password"):
+            raw_secrets = {**raw_secrets, "sys_password": session["sys_password"]}
         spec = cls.secret_spec(params)          # from whatever parameters are valid so far
         if need_secrets:
             try:
                 secrets = v.validate({k: raw_secrets[k] for k in spec if k in raw_secrets}, spec)
             except v.ValidationError as exc:
                 errors.update({f"secrets.{k}": m for k, m in exc.errors.items()})
+        elif raw_secrets.get("sys_password") and "sys_password" in cls.SECRETS:
+            try:                                # a plan may still need SYSDBA in remote mode
+                secrets = v.validate({"sys_password": raw_secrets["sys_password"]}, {"sys_password": "password"})
+            except v.ValidationError:
+                pass
         for k in raw_secrets:
             if k not in cls.SECRETS:
                 errors[f"secrets.{k}"] = "unknown secret"
@@ -95,6 +115,11 @@ class Operation:
         if self.params.get("pdbs"):
             return list(self.params["pdbs"])
         return pdb_range(self.params["prefix"], self.params["first"], self.params["last"])
+
+    def sysdba(self) -> SysdbaConn:
+        """Connection for privileged SQL; raises SysPasswordMissing (shown to the user) when remote
+        mode has no SYS password."""
+        return SysdbaConn.from_params(self.params, self.secrets.get("sys_password")).require()
 
     def secret_values(self) -> list[str]:
         return [s for s in self.secrets.values() if s]

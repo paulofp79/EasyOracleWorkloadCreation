@@ -141,7 +141,18 @@ export interface Plan {
 
 export interface LogFile { index: number; label: string; name: string; exists: boolean; size: number }
 
+export interface SessionState {
+  sys_password_set: boolean;
+  expires_at: string | null;
+  cdb_connect: "local" | "remote";
+  connection: string;
+}
+
 export const api = {
+  session: () => request<SessionState>("GET", "/api/session"),
+  setSysPassword: (sys_password: string, hours: number) =>
+    request<SessionState>("PUT", "/api/session/sys-password", { sys_password, hours }),
+  forgetSysPassword: () => request<SessionState>("DELETE", "/api/session/sys-password"),
   health: () => request<{ status: string; version: string; mode: "real" | "simulate" }>("GET", "/api/health"),
   profiles: () => request<{ profiles: Profile[] }>("GET", "/api/profiles").then((r) => r.profiles),
   fields: () => request<{ fields: Record<string, FieldMeta> }>("GET", "/api/profiles/fields").then((r) => r.fields),

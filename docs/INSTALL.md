@@ -1,8 +1,18 @@
 # Installing on Oracle Linux
 
-Target: Oracle Linux 8 or 9 (x86_64) on a DB node, or an admin host with an Oracle client, where the
-`oracle` OS user can run `sqlplus / as sysdba` against the CDB. The app runs as `oracle`, needs no
-root at run time and listens on `127.0.0.1:8080` only.
+Target: Oracle Linux 8 or 9 (x86_64). The app runs as `oracle`, needs no root at run time and
+listens on `127.0.0.1:8080` only. Pick one of two layouts (set in the profile, "CDB connection"):
+
+| Layout | Privileged SQL | Needs on the app host |
+|---|---|---|
+| **Local**: app on a database node | `sqlplus / as sysdba` (OS authentication) | Oracle home of the CDB, `ORACLE_SID`, Swingbench + Java |
+| **Remote**: app on a separate server | `sqlplus sys@//<scan>:<port>/<CDB root service> as sysdba` | Oracle Instant Client with SQL*Plus, Swingbench + Java, network to SCAN:1521 |
+
+In remote mode the SYS password is entered once per browser session ("SYS password" in the top
+bar), checked with a SYSDBA logon, kept in server memory only and given to sqlplus on stdin. The CDB
+needs a password file that allows remote SYSDBA logons (`remote_login_passwordfile=EXCLUSIVE`, the
+usual RAC setting); the CDB root service is typically `<db_unique_name>.<db_domain>`
+(`lsnrctl status` or `select name from v$services` in CDB$ROOT shows it).
 
 Two ways to install:
 
@@ -24,7 +34,21 @@ repository (`frontend/dist`).
 If dnf stops with "Failed to download metadata for repo '<name>'" (an internal repository that needs
 credentials), skip that repository for this command: `dnf --disablerepo=<name> install -y git python3.11 python3.11-pip`.
 
-Swingbench must already be installed for `oracle` (with its Java), e.g. `/home/oracle/swingbench/bin/charbench`.
+Swingbench must be installed for `oracle` on the host that runs the app (with the Java version your
+Swingbench release needs, e.g. `dnf install -y java-17-openjdk`), e.g. `/home/oracle/swingbench/bin/charbench`.
+
+**Remote layout only: Oracle Instant Client with SQL*Plus** (from the Oracle Linux yum server):
+
+```bash
+# OL8 (use the -el9 package on OL9); 23ai clients connect to 19c and later databases
+dnf install -y oracle-instantclient-release-23ai-el8
+dnf install -y oracle-instantclient-basic oracle-instantclient-sqlplus
+which sqlplus && sqlplus -V
+```
+
+Package names differ between client releases (`dnf search oracle-instantclient` lists them). If only
+`sqlplus64` is on the PATH, add the client's `bin` directory (e.g. `/usr/lib/oracle/*/client64/bin`) to
+`oracle`'s PATH.
 
 If the server reaches the internet through a proxy, export it in the shell you use for the following
 steps: `export https_proxy=http://proxy.example.com:80 http_proxy=$https_proxy`.
@@ -58,8 +82,10 @@ and needs access to the npm registry.
 
 ### 5. Oracle environment
 
-The backend uses OS authentication exactly like the scripts, so the shell that starts it needs the
-CDB environment:
+**Remote layout:** nothing to set; skip to step 6 (sqlplus only has to be on the PATH).
+
+**Local layout:** the backend uses OS authentication exactly like the scripts, so the shell that
+starts it needs the CDB environment:
 
 ```bash
 export ORACLE_SID=<cdb instance on this node>      # e.g. the local instance of the RAC CDB
@@ -98,11 +124,14 @@ Then browse to http://localhost:8080. Through a jump host: `ssh -J user@bastion 
 ### 8. First use
 
 1. **Profiles**: edit the `default` profile: SCAN host and port, service suffix (e.g. `.us.oracle.com`),
-   RAC CDB, `oewizard` and `charbench` paths, config XML, log/run directory, ranges and defaults.
-2. **Environment**: "Run check again" until sqlplus, `/ as sysdba` (CDB name, version, instances),
-   oewizard, charbench, config XML and the log directory all pass.
-3. **PDBs**: confirm the inventory matches `gv$pdbs`.
-4. Start with something harmless: **Check connections** on a few PDBs.
+   **CDB connection** (local or remote) and, for remote, the **CDB root service**, RAC CDB, `oewizard`
+   and `charbench` paths, config XML, log/run directory, ranges and defaults.
+2. Remote layout: click **SYS password needed** in the top bar and enter it (wrong passwords and wrong
+   services are reported right away, e.g. ORA-01017 / ORA-12514).
+3. **Environment**: "Run check again" until sqlplus, the SYSDBA connection (CDB name, version,
+   instances, container CDB$ROOT), oewizard, charbench, config XML and the log directory all pass.
+4. **PDBs**: confirm the inventory matches `gv$pdbs`.
+5. Start with something harmless: **Check connections** on a few PDBs.
 
 Optional rehearsal without touching Oracle: `ORCH_MODE=simulate ORCH_PORT=8081 venv/bin/python -m app`
 runs the whole UI against the stub tools in `tools/stubs` (separate database under `var/sim`).

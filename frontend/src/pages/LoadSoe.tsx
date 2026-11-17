@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError, type Plan } from "../api/client";
 import { FormField } from "../components/FormField";
+import { useSession } from "../components/SysSession";
 import { validateParams } from "../validators";
 
 // field, label, rule, profile field, unit, hint
@@ -32,6 +33,8 @@ export default function LoadSoe() {
   const [pdbs, setPdbs] = useState<string[] | undefined>((location.state as { pdbs?: string[] } | null)?.pdbs);
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const profile = profiles?.find((p) => p.is_active);
+  const session = useSession().data;
+  const sysFromSession = !!session?.sys_password_set;
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [keepGoing, setKeepGoing] = useState(false);
   const [force, setForce] = useState(false);
@@ -66,7 +69,7 @@ export default function LoadSoe() {
   const planM = useMutation({ mutationFn: () => api.plan("load", params()),
     onSuccess: (r) => { setPlan(r.plan); setServerErrors({}); setFormError(""); }, onError });
   const startM = useMutation({
-    mutationFn: () => api.startRun("load", params(), { soe_password: soePw, sys_password: sysPw }),
+    mutationFn: () => api.startRun("load", params(), sysPw ? { soe_password: soePw, sys_password: sysPw } : { soe_password: soePw }),
     onSuccess: (r) => { setSoePw(""); setSysPw(""); navigate(`/runs/${r.run_id}`); }, onError });
   const importM = useMutation({
     mutationFn: () => api.importMarkers(importDir),
@@ -85,7 +88,8 @@ export default function LoadSoe() {
   if (!plan) blockers.push("run the plan");
   if (plan?.blocked) blockers.push("fix the PDBs the plan reports");
   if (plan && !plan.blocked && !toLoad.length) blockers.push("nothing to load");
-  if (!soePw || !sysPw) blockers.push("enter both passwords");
+  if (!soePw) blockers.push("enter the SOE password");
+  if (!sysPw && !sysFromSession) blockers.push("enter the SYS password");
   if (force && !forceOk) blockers.push("confirm the force reload");
   const hasErrors = Object.keys(clientErrors).length > 0;
 
@@ -127,6 +131,7 @@ export default function LoadSoe() {
                        autoComplete="new-password" onChange={(v) => { setSoePw(v); setServerErrors(({ soe_password: _x, ...r }) => r); }} />
             <FormField name="sys_password" label="SYS password (oewizard -dbap)" type="password" value={sysPw}
                        error={errors.sys_password} autoComplete="new-password"
+                       hint={sysFromSession ? "Leave empty to use the SYS password of this browser session" : undefined}
                        onChange={(v) => { setSysPw(v); setServerErrors(({ sys_password: _x, ...r }) => r); }} />
           </div>
           <small className="hint text-warn">

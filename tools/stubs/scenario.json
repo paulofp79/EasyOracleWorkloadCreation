@@ -4,13 +4,22 @@
   "cdb": {
     "name": "SIMCDB",
     "version": "19.0.0.0.0",
-    "instances": ["simcdb1", "simcdb2"],
+    "instances": [
+      "simcdb1",
+      "simcdb2"
+    ],
     "cluster_database": "TRUE",
     "wallet": true,
-    "sysdba": "ok"
+    "sysdba": "ok",
+    "service": "simcdb.example.com"
   },
   "initial_pdbs": [
-    {"prefix": "PDBPP", "first": 1, "last": 250, "soe_loaded": true}
+    {
+      "prefix": "PDBPP",
+      "first": 1,
+      "last": 250,
+      "soe_loaded": true
+    }
   ],
   "delays": {
     "sqlplus": 0.05,
@@ -25,14 +34,32 @@
     "line_interval": 1.0
   },
   "pdb_scenarios": {
-    "PDBPP_003": {"check": "ora12514"},
-    "PDBPP_007": {"check": "hang"},
-    "PDBPP_011": {"check": "wrong_container"},
-    "PDBPP_013": {"check": "no_schema"},
-    "PDBPP_017": {"load": "fail"},
-    "PDBPP_019": {"workload": "errors"},
-    "PDBPP_023": {"workload": "exit1"},
-    "PDBPP_029": {"open": "mounted"},
-    "PDBPP_031": {"create": "fail"}
+    "PDBPP_003": {
+      "check": "ora12514"
+    },
+    "PDBPP_007": {
+      "check": "hang"
+    },
+    "PDBPP_011": {
+      "check": "wrong_container"
+    },
+    "PDBPP_013": {
+      "check": "no_schema"
+    },
+    "PDBPP_017": {
+      "load": "fail"
+    },
+    "PDBPP_019": {
+      "workload": "errors"
+    },
+    "PDBPP_023": {
+      "workload": "exit1"
+    },
+    "PDBPP_029": {
+      "open": "mounted"
+    },
+    "PDBPP_031": {
+      "create": "fail"
+    }
   }
 }

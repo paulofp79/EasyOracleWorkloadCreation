@@ -26,7 +26,19 @@ function Field({ name, meta, value, error, onChange }: {
       </div>
     );
   }
-  const wide = meta.rule === "abs_path" || name === "scan_host";
+  if (meta.rule === "cdb_connect") {
+    return (
+      <div className={`field field-wide${error ? " has-error" : ""}`}>
+        <label htmlFor={id}>{ui.label}</label>
+        <select id={id} value={String(value ?? "local")} onChange={(e) => onChange(e.target.value)}>
+          <option value="local">Local: sqlplus / as sysdba (the app runs on a database node)</option>
+          <option value="remote">Remote: sqlplus sys@//SCAN:port/CDB-service as sysdba (separate app server)</option>
+        </select>
+        {error ? <small className="field-error">{error}</small> : ui.hint && <small className="hint">{ui.hint}</small>}
+      </div>
+    );
+  }
+  const wide = meta.rule === "abs_path" || name === "scan_host" || name === "cdb_service";
   return (
     <div className={`field${wide ? " field-wide" : ""}${error ? " has-error" : ""}`}>
       <label htmlFor={id}>

@@ -10,7 +10,9 @@ from typing import Any
 from ..config import Settings
 from ..engine.runner import ProcessRunner, ToolNotFound
 from ..parsing import first_error
+from ..redact import Redactor
 from ..sqlbuild import ENV_CHECK_TOKEN, env_check_sql
+from ..sysdba import SysdbaConn, SysPasswordMissing
 
 LOW_DISK_BYTES = 2 * 1024 ** 3
 
@@ -81,8 +83,9 @@ def check_log_dir(path: str) -> Check:
     return c
 
 
-async def run_env_check(settings: Settings, params: dict[str, Any]) -> dict[str, Any]:
-    runner = ProcessRunner(settings.tool_env())
+async def run_env_check(settings: Settings, params: dict[str, Any], sys_password: str | None = None) -> dict[str, Any]:
+    conn = SysdbaConn.from_params(params, sys_password)
+    runner = ProcessRunner(settings.tool_env(), Redactor([sys_password] if sys_password else []))
     checks: list[Check] = []
 
     checks.append(Check("mode", "Mode", "warn" if settings.simulate else "pass",
@@ -94,6 +97,8 @@ async def run_env_check(settings: Settings, params: dict[str, Any]) -> dict[str,
     c = Check("oracle_env", "ORACLE_HOME / ORACLE_SID")
     if settings.simulate:
         c.status, c.detail = "skip", "not needed in simulation"
+    elif conn.remote:
+        c.status, c.detail = "skip", "not needed: the CDB is reached over the network (remote mode)"
     else:
         missing = [k for k in ("ORACLE_HOME", "ORACLE_SID") if not env.get(k)]
         c.detail = ", ".join(f"{k}={env.get(k, '')}" for k in ("ORACLE_HOME", "ORACLE_SID"))
@@ -115,12 +120,18 @@ async def run_env_check(settings: Settings, params: dict[str, Any]) -> dict[str,
             c.status, c.error = "fail", str(exc)
     checks.append(c)
 
-    # / as sysdba
-    c = Check("sysdba", "Connect / as sysdba (CDB root)")
+    # SYSDBA connection to the CDB root (local OS authentication or remote sys@//scan/service)
+    c = Check("sysdba", f"Connect {conn.describe()} (CDB root)")
     if sqlplus is None:
         c.status, c.error = "skip", "sqlplus not available"
+    elif conn.remote and not conn.service:
+        c.status, c.error = "fail", "remote mode needs the CDB root service name (profile: CDB service)"
+    elif conn.remote and not conn.password:
+        c.status, c.error = "warn", str(SysPasswordMissing())
     else:
-        r = await runner.run([sqlplus, "-L", "-s", "/", "as", "sysdba"], stdin_text=env_check_sql(), timeout=30)
+        argv = conn.argv()
+        argv[0] = sqlplus
+        r = await runner.run(argv, stdin_text=conn.stdin(env_check_sql()), timeout=30)
         line = next((ln for ln in r.tail if ln.startswith(ENV_CHECK_TOKEN)), None)
         if r.timed_out:
             c.status, c.error = "fail", "timed out after 30s"
@@ -137,7 +148,7 @@ async def run_env_check(settings: Settings, params: dict[str, Any]) -> dict[str,
             if is_cdb.upper() != "YES":
                 c.status, c.error = "fail", f"{name} is not a container database"
             elif con.upper() != "CDB$ROOT":
-                c.status, c.error = "fail", f"session is in {con}, expected CDB$ROOT"
+                c.status, c.error = "fail", f"session is in {con}, expected CDB$ROOT (use the CDB root service)"
             elif bool(params.get("rac_cdb")) != rac:
                 c.status = "warn"
                 c.error = (f"profile says RAC CDB = {str(bool(params.get('rac_cdb'))).lower()}, "

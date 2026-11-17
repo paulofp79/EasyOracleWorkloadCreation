@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { api, ApiError, type Plan } from "../api/client";
 import DropConfirm from "../components/DropConfirm";
 import { FormField } from "../components/FormField";
+import { useSession } from "../components/SysSession";
 import { validateParams } from "../validators";
 
 type Action = "drop" | "skip" | "abort";
@@ -13,6 +14,8 @@ export default function CreatePdbs() {
   const navigate = useNavigate();
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const profile = profiles?.find((p) => p.is_active);
+  const session = useSession().data;
+  const needSys = session?.cdb_connect === "remote" && !session.sys_password_set;
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [rac, setRac] = useState(true);
   const [wallet, setWallet] = useState<boolean | null>(null);       // no default: must be chosen
@@ -63,6 +66,7 @@ export default function CreatePdbs() {
   const set = (k: string, v: string) => { setValues({ ...values, [k]: v }); reset(); setServerErrors(({ [k]: _x, ...r }) => r); };
   const hasErrors = Object.keys(clientErrors).length > 0;
   const blockers: string[] = [];
+  if (needSys) blockers.push("set the SYS password (top bar)");
   if (wallet === null) blockers.push("choose whether to create a TDE master key");
   if (!plan) blockers.push("run the plan");
   if (!adminPw) blockers.push("enter the PDB admin password");

@@ -11,6 +11,8 @@ export const FIELD_UI: Record<string, FieldUi> = {
   scan_host: { label: "SCAN host", group: "Connection" },
   scan_port: { label: "SCAN port", group: "Connection" },
   service_suffix: { label: "Service suffix", group: "Connection", hint: "Appended to the lower-case PDB name, e.g. .us.oracle.com" },
+  cdb_connect: { label: "CDB connection (SYSDBA)", group: "Connection", hint: "Remote: this app runs on a separate server" },
+  cdb_service: { label: "CDB root service", group: "Connection", hint: "Remote mode: service of CDB$ROOT, e.g. cdb1.us.oracle.com" },
   rac_cdb: { label: "RAC CDB", group: "Create", hint: "OPEN/CLOSE … INSTANCES=ALL; off = OPEN + SAVE STATE" },
   create_first: { label: "First", group: "Create" },
   create_last: { label: "Last", group: "Create" },

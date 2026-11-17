@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api/client";
+import SysSession from "./components/SysSession";
 import Check from "./pages/Check";
 import CreatePdbs from "./pages/CreatePdbs";
 import DropPdbs from "./pages/DropPdbs";
@@ -101,6 +102,7 @@ export default function App() {
           )}
           {health?.mode === "real" && <span className="badge badge-real">LIVE ORACLE</span>}
           <div className="spacer" />
+          <SysSession />
           <ProfileSwitcher />
           <label className="theme-switch">
             <span>Theme</span>

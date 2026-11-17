@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type InventoryPdb } from "../api/client";
+import { api, ApiError, type InventoryPdb } from "../api/client";
 import { fmtTime } from "../components/states";
 
 const MODE_SHORT: Record<string, string> = { "READ WRITE": "RW", "READ ONLY": "RO", MOUNTED: "MNT", MIGRATE: "MIG" };
@@ -78,7 +78,12 @@ export default function Pdbs() {
           <button className="btn" onClick={() => inv.refetch()} disabled={inv.isFetching}>{inv.isFetching ? "Refreshing…" : "Refresh"}</button>
         </div>
       </div>
-      {inv.error && <div className="card error-box">{(inv.error as Error).message}</div>}
+      {inv.error && (
+        <div className="card error-box">
+          {(inv.error as Error).message}
+          {(inv.error as ApiError).status === 428 && <> Then press Refresh.</>}
+        </div>
+      )}
 
       <div className="toolbar">
         <input placeholder="Filter name or check detail…" value={text} onChange={(e) => setText(e.target.value)} aria-label="Filter text" />

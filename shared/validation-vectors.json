@@ -338,5 +338,30 @@
       "",
       null
     ]
+  },
+  "cdb_connect": {
+    "valid": [
+      "local",
+      "remote"
+    ],
+    "invalid": [
+      "LOCAL",
+      "",
+      "tcp",
+      null
+    ]
+  },
+  "cdb_service": {
+    "valid": [
+      "",
+      "cdb1.us.oracle.com",
+      "CDB1_svc-a"
+    ],
+    "invalid": [
+      "cdb/x",
+      "a b",
+      "svc;drop",
+      "'x'"
+    ]
   }
 }

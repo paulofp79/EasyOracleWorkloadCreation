@@ -21,8 +21,8 @@ from ..naming import pdb_connect_string
 from ..parsing import first_error
 from ..redact import MASK
 from ..sqlbuild import soe_setup_sql
-from .base import Operation, PlanError
-from .inventory import SYSDBA, InventoryError, query_preflight
+from .base import Operation, PlanError, SysPasswordMissing
+from .inventory import InventoryError, query_preflight
 
 SHOW = 10
 SHOW_FAILED = 20
@@ -47,12 +47,14 @@ class LoadSoe(Operation):
     PARAMS = {"prefix": "prefix", "first": "pdb_number", "last": "pdb_number", "scan_host": "scan_host",
               "scan_port": "scan_port", "service_suffix": "service_suffix", "scale": "scale",
               "threads": "positive_int", "tablespace": "tablespace", "parallel": "positive_int",
-              "keep_going": "boolean", "oewizard_path": "abs_path", "log_dir": "abs_path"}
+              "keep_going": "boolean", "oewizard_path": "abs_path", "log_dir": "abs_path",
+              "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
     OPTIONAL = {"pdbs": "pdb_names", "force": "boolean"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "load_first", "last": "load_last", "scan_host": "scan_host",
                         "scan_port": "scan_port", "service_suffix": "service_suffix", "scale": "scale",
                         "threads": "threads", "tablespace": "tablespace", "parallel": "parallel",
-                        "keep_going": "keep_going", "oewizard_path": "oewizard_path", "log_dir": "log_dir"}
+                        "keep_going": "keep_going", "oewizard_path": "oewizard_path", "log_dir": "log_dir",
+                        "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
     SECRETS = {"soe_password": "quoted_password", "sys_password": "password"}
 
     @property
@@ -103,7 +105,7 @@ class LoadSoe(Operation):
 
     async def plan(self) -> dict[str, Any]:
         try:
-            live = await query_preflight(self.settings, self.params["prefix"])
+            live = await query_preflight(self.settings, self.params["prefix"], self.sysdba())
         except (InventoryError, ToolNotFound) as exc:
             raise PlanError(f"Could not check the PDBs: {exc}") from exc
         c = self.classify(live)
@@ -132,7 +134,7 @@ class LoadSoe(Operation):
         ctx.update_run(phase="preflight")
         ctx.log(f"checking PDBs {self.targets()[0]} through {self.targets()[-1]}")
         try:
-            live = await query_preflight(self.settings, p["prefix"], ctx.runner)
+            live = await query_preflight(self.settings, p["prefix"], self.sysdba(), ctx.runner)
         except (InventoryError, ToolNotFound) as exc:
             raise PlanError(f"Could not check the PDBs: {exc}") from exc
         c = self.classify(live)
@@ -174,7 +176,8 @@ class LoadSoe(Operation):
                                                     proc_starttime=res.starttime)
                 ctx.set_item(pdb, state="running", started_at=started, con_uid=live[pdb][0],
                              detail="step 1/2: GRANT DBA TO soe")
-                r = await ctx.runner.run(SYSDBA, stdin_text=soe_setup_sql(pdb, soe_pw),
+                conn = self.sysdba()
+                r = await ctx.runner.run(conn.argv(), stdin_text=conn.stdin(soe_setup_sql(pdb, soe_pw)),
                                          log_path=ctx.run_dir / f"{pdb}-soe-setup.log", on_start=on_start)
                 if r.cancelled:
                     ctx.set_item(pdb, state="cancelled", ended_at=utcnow(), detail="stopped during SOE setup")

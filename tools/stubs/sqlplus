@@ -205,6 +205,22 @@ def main():
     sql = sys.stdin.read()
     if "/nolog" in args:
         return run_nolog(sql)
+    remote = [a for a in args if re.match(r"(?i)^sys@//", a)]
+    if remote and "sysdba" in [a.lower() for a in args]:
+        # Remote logon: sqlplus prompts for the password and reads the first stdin line.
+        password, _, sql = sql.partition("\n")
+        cdb = sim.SCENARIO["cdb"]
+        service = remote[0].rsplit("/", 1)[-1].lower()
+        expected_pw = cdb.get("sys_password")
+        if service != cdb.get("service", "simcdb.example.com").lower():
+            sim.out("ERROR:", "ORA-12514: TNS:listener does not currently know of service requested in connect "
+                    "descriptor", "", "", "SP2-0751: Unable to connect to Oracle.  Exiting SQL*Plus")
+            return 1
+        if not password or (expected_pw is not None and password != expected_pw):
+            sim.out("ERROR:", "ORA-01017: invalid username/password; logon denied", "", "",
+                    "SP2-0751: Unable to connect to Oracle.  Exiting SQL*Plus")
+            return 1
+        return run_sysdba(sql)
     if "/" in args and "sysdba" in args:
         return run_sysdba(sql)
     sim.out("SP2-0306: Invalid option.")

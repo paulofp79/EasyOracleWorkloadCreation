@@ -118,3 +118,14 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 **M5 History & artifacts** – Runs list/filter, artifacts.zip (streamed), summary.csv, compare two workload runs, restart recovery + Kill leftovers, retention info (disk usage per run).
 
 **M6 Hardening** – non-localhost bind requires auth (argon2/scrypt hash set at first start, HttpOnly SameSite=Strict cookie, CSRF token), audit page, secret-leak test suite (responses, DB, run dir, logs), Playwright smoke at 250 PDBs, systemd unit + install script, README (install, SSH tunnel, nginx TLS example, operations).
+
+## 9. Change after M4: remote CDB connection (approved)
+
+The decision "backend on the DB host with OS-authenticated sqlplus" (PROJECT_CONTEXT §14) became one
+of two profile settings. `cdb_connect = local` keeps `sqlplus -L -s / as sysdba`. `cdb_connect = remote`
+runs `sqlplus -L -s sys@//<scan>:<port>/<cdb_service> as sysdba` from a separate server; sqlplus reads
+the SYS password from the first stdin line (never argv), and `-L` makes a failed logon exit at once,
+so no statement runs unconnected. All privileged SQL goes through `app/sysdba.py`. The SYS password
+comes from the request or from an in-memory, per-browser session (HttpOnly SameSite=Strict cookie,
+1–24 h expiry, verified by a SYSDBA logon when set, lost on restart, never written anywhere).
+

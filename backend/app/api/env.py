@@ -3,7 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 
 from .. import __version__
+from .. import validators as v
 from ..ops.envcheck import run_env_check
+from .session import session_secrets
 from .deps import db, settings
 
 router = APIRouter(prefix="/api", tags=["environment"])
@@ -21,6 +23,7 @@ async def env_check(request: Request, profile_id: int | None = None):
     profile = d.get_profile(profile_id) if profile_id is not None else d.active_profile()
     if profile is None:
         raise HTTPException(404, "profile not found")
-    result = await run_env_check(settings(request), profile["params"])
+    result = await run_env_check(settings(request), v.profile_params(profile),
+                                 session_secrets(request).get("sys_password"))
     result["profile"] = {"id": profile["id"], "name": profile["name"]}
     return result

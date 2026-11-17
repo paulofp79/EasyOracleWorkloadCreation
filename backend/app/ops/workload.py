@@ -19,7 +19,7 @@ from ..db import utcnow
 from ..engine.runner import ToolNotFound
 from ..logscan import ERR_REGEX, FIRST_MAX, scan_file
 from ..redact import MASK
-from .base import Operation, PlanError
+from .base import Operation, PlanError, SysPasswordMissing
 from .check_conn import CHECK_PARAMS, CONN_DIR, CONNECTION_PARAMS, check_summary, connect_for, run_checks
 from .inventory import InventoryError, query_preflight
 
@@ -57,8 +57,13 @@ class Workload(Operation):
                         "check_timeout": "check_timeout", "check_parallel": "check_parallel",
                         "skip_unreachable": "skip_unreachable", "users": "users", "runtime": "runtime",
                         "charbench_path": "charbench_path", "config_xml": "config_xml",
-                        "disable_txns": "disable_txns", "start_delay": "start_delay", "log_dir": "log_dir"}
-    SECRETS = {"soe_password": "quoted_password"}
+                        "disable_txns": "disable_txns", "start_delay": "start_delay", "log_dir": "log_dir",
+                        "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
+    SECRETS = {"soe_password": "quoted_password", "sys_password": "password"}
+
+    @classmethod
+    def secret_spec(cls, params):
+        return {"soe_password": "quoted_password"}
 
     def argv(self, run_dir: Path, pdb: str, password: str) -> list[str]:
         p = self.params
@@ -105,14 +110,17 @@ class Workload(Operation):
 
     async def plan(self) -> dict[str, Any]:
         pdbs = self.targets()
-        try:
-            live = await query_preflight(self.settings, self.params["prefix"])
-        except (InventoryError, ToolNotFound) as exc:
-            raise PlanError(f"Could not read gv$pdbs: {exc}") from exc
-        missing = [x for x in pdbs if x not in live]
-        not_open = [x for x in pdbs if x in live and live[x][1] < 1]
         problems = self.tool_problems()
         warnings = list(problems)
+        try:
+            live = await query_preflight(self.settings, self.params["prefix"], self.sysdba())
+        except SysPasswordMissing:
+            live = None
+            warnings.append("PDB existence not verified: no SYS password in this browser session.")
+        except (InventoryError, ToolNotFound) as exc:
+            raise PlanError(f"Could not read gv$pdbs: {exc}") from exc
+        missing = [x for x in pdbs if live is not None and x not in live]
+        not_open = [x for x in pdbs if live is not None and x in live and live[x][1] < 1]
         bad = len(missing) + len(not_open)
         if bad:
             policy = ("they will be skipped (skip unreachable)" if self.params["skip_unreachable"]

@@ -30,6 +30,8 @@ const positiveInt: Rule = (v) => {
 const PDB_NAME = /^[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}$/;
 
 export const RULES: Record<string, Rule> = {
+  cdb_connect: (v) => (v === "local" || v === "remote" ? null : "must be local or remote"),
+  cdb_service: (v) => (v == null ? null : re(/^[A-Za-z0-9._-]*$/, "may contain only letters, digits, '.', '_' and '-'")(v)),
   existing_action: (v) => (v === "drop" || v === "skip" || v === "abort" ? null : "must be drop, skip or abort"),
   confirm_token: (v) => (typeof v === "string" && /^[0-9a-f]{16}$/.test(v) ? null : "is not a valid confirmation token; run the plan again"),
   confirm_delete: (v) => (v === "DELETE" ? null : "type DELETE to confirm"),
@@ -89,6 +91,9 @@ export function validateParams(params: Record<string, unknown>, spec: Record<str
     if (!errors[a] && !errors[b] && a in params && b in params && Number(params[a]) > Number(params[b])) {
       errors[b] = `must be greater than or equal to ${a.replace("_", " ")}`;
     }
+  }
+  if (params.cdb_connect === "remote" && "cdb_service" in spec && !params.cdb_service && !errors.cdb_service) {
+    errors.cdb_service = "is required for a remote CDB connection (the CDB root service name)";
   }
   return errors;
 }

@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError, type Plan } from "../api/client";
 import DropConfirm from "../components/DropConfirm";
 import { FormField } from "../components/FormField";
+import { useSession } from "../components/SysSession";
 import { validateParams } from "../validators";
 
 export default function DropPdbs() {
@@ -12,6 +13,8 @@ export default function DropPdbs() {
   const [pdbs, setPdbs] = useState<string[] | undefined>((location.state as { pdbs?: string[] } | null)?.pdbs);
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
   const profile = profiles?.find((p) => p.is_active);
+  const session = useSession().data;
+  const needSys = session?.cdb_connect === "remote" && !session.sys_password_set;
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [rac, setRac] = useState(true);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -98,8 +101,9 @@ export default function DropPdbs() {
             {planM.isPending ? "Planning…" : plan ? "Plan again" : "Plan / dry run"}
           </button>
           <div className="spacer" />
+          {needSys && <span className="muted small">Set the SYS password (top bar) first.</span>}
           <button type="button" className="btn btn-danger-solid"
-                  disabled={!plan || !existing.length || confirmText !== "DELETE" || startM.isPending}
+                  disabled={needSys || !plan || !existing.length || confirmText !== "DELETE" || startM.isPending}
                   onClick={() => startM.mutate()}>
             {startM.isPending ? "Starting…" : `Drop ${existing.length} PDB(s)`}
           </button>

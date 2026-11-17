@@ -10,7 +10,8 @@ check SOE connections and run one `charbench` workload per PDB at the same time:
 |---|---|
 | [`docs/INSTALL.md`](docs/INSTALL.md) | installing on Oracle Linux 8/9 (online or offline bundle), service, direct HTTPS access |
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | service, logins, backups, disk, upgrades, troubleshooting, security notes |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | design, data model, process management, parity notes with the scripts |
+| [`docs/IT-ARCHITECTURE.md`](docs/IT-ARCHITECTURE.md) | IT architecture with diagrams: context, deployment, network, components, data, runtime, security, resilience |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | design decisions, process management, parity notes with the scripts |
 | [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) | original requirements |
 
 ## What it does

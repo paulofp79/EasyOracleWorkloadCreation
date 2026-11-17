@@ -11,13 +11,14 @@ const FIELDS: [string, string, string, string, string?, string?][] = [
   ["prefix", "PDB prefix", "prefix", "prefix"],
   ["first", "First", "pdb_number", "load_first"],
   ["last", "Last", "pdb_number", "load_last"],
+  ["parallel", "Parallel loads", "positive_int", "parallel", undefined,
+    "PDBs loading at the same time (1 = one after another); a new one starts as soon as one finishes"],
   ["scan_host", "SCAN host", "scan_host", "scan_host"],
   ["scan_port", "SCAN port", "scan_port", "scan_port"],
   ["service_suffix", "Service suffix", "service_suffix", "service_suffix", undefined, "e.g. .us.oracle.com"],
   ["scale", "Scale", "scale", "scale", undefined, "SOE scale factor, e.g. 0.1"],
   ["threads", "Threads per PDB (-tc)", "positive_int", "threads"],
   ["tablespace", "Tablespace (-ts)", "tablespace", "tablespace"],
-  ["parallel", "PDBs loaded at the same time", "positive_int", "parallel"],
   ["oewizard_path", "oewizard path", "abs_path", "oewizard_path"],
   ["log_dir", "Log / run directory", "abs_path", "log_dir"],
 ];
@@ -148,6 +149,18 @@ export default function LoadSoe() {
               <>
                 <p><strong>{toLoad.length}</strong> PDB(s) to load, up to <strong>{values.parallel}</strong> at a time;{" "}
                   <strong>{already.length}</strong> already loaded and skipped.</p>
+                {toLoad.length > 0 && (() => {
+                  const par = Math.min(Number(values.parallel) || 1, toLoad.length);
+                  const sessions = par * (Number(values.threads) || 1);
+                  return (
+                    <p className={sessions >= 256 ? "text-warn" : "muted"}>
+                      {par === 1 ? "Loads run one after another: " : `Up to ${par} oewizard processes at once: `}
+                      {par} × {values.threads} threads = up to <strong>{sessions}</strong> loader sessions on the CDB
+                      {Number(values.parallel) > toLoad.length ? ` (only ${toLoad.length} PDB(s) to load)` : ""}.
+                      {sessions >= 256 ? " That is a heavy load on the database and on this host's CPUs and memory (one JVM per load)." : ""}
+                    </p>
+                  );
+                })()}
                 {toLoad.length > 0 && <NameList names={toLoad} />}
                 {already.length > 0 && (
                   <details><summary>Already loaded ({already.length})</summary><NameList names={already} /></details>

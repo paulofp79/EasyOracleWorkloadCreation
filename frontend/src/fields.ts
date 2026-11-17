@@ -21,7 +21,7 @@ export const FIELD_UI: Record<string, FieldUi> = {
   scale: { label: "Scale", group: "Load SOE" },
   threads: { label: "Threads (-tc)", group: "Load SOE" },
   tablespace: { label: "Tablespace (-ts)", group: "Load SOE" },
-  parallel: { label: "Parallel loaders", group: "Load SOE" },
+  parallel: { label: "Parallel loads", group: "Load SOE", hint: "Default for Load SOE: PDBs loading at the same time (1 = one after another)" },
   keep_going: { label: "Keep going after a failure", group: "Load SOE" },
   oewizard_path: { label: "oewizard path", group: "Load SOE" },
   check_timeout: { label: "Timeout", group: "Connection check", unit: "s" },

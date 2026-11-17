@@ -27,7 +27,15 @@ const positiveInt: Rule = (v) => {
   return re(/^[1-9][0-9]*$/, "must be a positive integer without leading zeros")(v);
 };
 
+const PDB_NAME = /^[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}$/;
+
 export const RULES: Record<string, Rule> = {
+  pdb_names: (v) => {
+    if (!Array.isArray(v) || v.length === 0) return "must be a non-empty list of PDB names";
+    if (v.length > 999) return "at most 999 PDBs";
+    const bad = v.find((x) => typeof x !== "string" || !PDB_NAME.test(x) || x.endsWith("_000"));
+    return bad === undefined ? null : `${JSON.stringify(bad)} is not a PDB name like PDBPP_001`;
+  },
   prefix: re(/^[A-Za-z][A-Za-z0-9_]*$/, "must start with a letter and use only letters, digits and underscore",
     (s) => (s.length > 26 ? "must be at most 26 characters" : null)),
   pdb_number: (v) => positiveInt(v) ?? (Number(v) > 999 ? "must be between 1 and 999" : null),

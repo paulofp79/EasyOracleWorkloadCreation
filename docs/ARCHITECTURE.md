@@ -90,6 +90,11 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 5. oewizard path must be absolute in profiles (script default `./oewizard` is relative to the caller's cwd); relative values are resolved against the Swingbench `bin` dir and shown resolved.
 6. Truncation as in scripts: check reason 200 chars, first error line 150 chars; timeout detection also maps exit codes 124/137 for parity.
 7. Prefix is upper-cased before validation (load/workload scripts do this).
+8. Inventory page uses an extra read-only query (one row per PDB and instance, with instance name and
+   RESTRICTED) so open modes can be shown per instance; pre-flight keeps the script's exact query.
+   Names are filtered in code to `PREFIX_NNN`, because `LIKE 'PREFIX%'` also matches other names.
+9. A graceful backend stop (SIGTERM / systemd stop) stops the active run's processes like Stop all;
+   a crash leaves them, and the next start marks the run interrupted (Kill leftovers: M5).
 
 ## 7. Simulation mode
 

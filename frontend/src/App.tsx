@@ -1,20 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api/client";
+import Check from "./pages/Check";
 import Dashboard from "./pages/Dashboard";
 import Environment from "./pages/Environment";
 import Placeholder from "./pages/Placeholder";
+import Pdbs from "./pages/Pdbs";
 import Profiles from "./pages/Profiles";
+import RunDetail from "./pages/RunDetail";
+import Runs from "./pages/Runs";
 
 const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/", label: "Dashboard" },
-  { to: "/pdbs", label: "PDBs", milestone: "M1" },
+  { to: "/pdbs", label: "PDBs" },
   { to: "/create", label: "Create PDBs", milestone: "M2" },
   { to: "/load", label: "Load SOE", milestone: "M3" },
-  { to: "/check", label: "Check connections", milestone: "M1" },
+  { to: "/check", label: "Check connections" },
   { to: "/workload", label: "Run workload", milestone: "M4" },
-  { to: "/runs", label: "Runs", milestone: "M5" },
+  { to: "/runs", label: "Runs" },
   { to: "/profiles", label: "Profiles" },
   { to: "/environment", label: "Environment" },
 ];
@@ -66,6 +70,7 @@ function ProfileSwitcher() {
 export default function App() {
   const { data: health } = useQuery({ queryKey: ["health"], queryFn: api.health });
   const [theme, setTheme] = useTheme();
+  const location = useLocation();
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -107,6 +112,10 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/profiles" element={<Profiles />} />
             <Route path="/environment" element={<Environment />} />
+            <Route path="/pdbs" element={<Pdbs />} />
+            <Route path="/check" element={<Check />} />
+            <Route path="/runs" element={<Runs />} />
+            <Route path="/runs/:id" element={<RunDetail key={location.pathname} />} />
             {NAV.filter((n) => n.milestone).map((n) => (
               <Route key={n.to} path={n.to} element={<Placeholder title={n.label} milestone={n.milestone!} />} />
             ))}

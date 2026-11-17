@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -10,9 +9,9 @@ from typing import Any
 
 from ..config import Settings
 from ..engine.runner import ProcessRunner, ToolNotFound
+from ..parsing import first_error
 from ..sqlbuild import ENV_CHECK_TOKEN, env_check_sql
 
-ORA_LINE = re.compile(r"(ORA|TNS|SP2)-[0-9]+.*")
 LOW_DISK_BYTES = 2 * 1024 ** 3
 
 
@@ -23,16 +22,6 @@ class Check:
     status: str = "pass"          # pass | warn | fail | skip
     detail: str = ""
     error: str = ""
-
-
-def first_error(output: str) -> str:
-    m = ORA_LINE.search(output)
-    if m:
-        return m.group(0).strip()
-    for line in output.splitlines():
-        if line.strip():
-            return line.strip()
-    return ""
 
 
 def _gib(n: int) -> str:

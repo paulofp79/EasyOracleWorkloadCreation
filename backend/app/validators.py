@@ -193,7 +193,27 @@ def profile_name(v: Any) -> str:
     return s
 
 
+RE_PDB_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}")
+
+
+def pdb_names(v: Any) -> list[str]:
+    """Explicit PDB selection: list of PREFIX_NNN names, upper-cased, de-duplicated, order kept."""
+    if not isinstance(v, list) or not v:
+        raise RuleError("must be a non-empty list of PDB names")
+    if len(v) > MAX_PDB_NUMBER:
+        raise RuleError(f"at most {MAX_PDB_NUMBER} PDBs")
+    out: list[str] = []
+    for item in v:
+        if not isinstance(item, str) or not RE_PDB_NAME.fullmatch(item) or item.endswith("_000"):
+            raise RuleError(f"{str(item)[:40]!r} is not a PDB name like PDBPP_001")
+        name = item.upper()
+        if name not in out:
+            out.append(name)
+    return out
+
+
 RULES: dict[str, Callable[[Any], Any]] = {
+    "pdb_names": pdb_names,
     "prefix": prefix, "pdb_number": pdb_number, "positive_int": positive_int,
     "scan_host": scan_host, "scan_port": scan_port, "service_suffix": service_suffix,
     "scale": scale, "tablespace": tablespace, "runtime": runtime, "disable_txns": disable_txns,

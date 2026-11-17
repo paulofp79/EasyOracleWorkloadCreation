@@ -57,6 +57,78 @@ export interface EnvCheck {
   checks: EnvCheckItem[];
 }
 
+export type ItemState = "pending" | "checking" | "running" | "ok" | "failed" | "skipped" | "not_started" | "cancelled";
+export type RunStatus = "running" | "ok" | "failed" | "cancelled" | "interrupted" | "blocked";
+
+export interface RunItem {
+  pdb: string;
+  ord: number;
+  state: ItemState;
+  con_uid: string | null;
+  check_status: string | null;
+  check_detail: string | null;
+  instance: string | null;
+  pid: number | null;
+  pgid: number | null;
+  exit_code: number | null;
+  started_at: string | null;
+  ended_at: string | null;
+  detail: string | null;
+  error_count: number | null;
+  first_error: string | null;
+}
+
+export interface Run {
+  id: string;
+  type: string;
+  status: RunStatus;
+  phase: string | null;
+  params: Record<string, any>;
+  run_dir: string;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  summary: Record<string, any> | null;
+  message: string | null;
+  counts: Partial<Record<ItemState, number>>;
+  total: number;
+  event_seq: number | null;
+  live: boolean;
+}
+
+export interface InventoryPdb {
+  name: string;
+  number: number;
+  con_uid: string;
+  rw_instances: number;
+  n_instances: number;
+  restricted: boolean;
+  instances: { inst_id: number; instance: string; open_mode: string; restricted: boolean }[];
+  soe_loaded: { loaded_at: string; run_id: string; scale: string } | null;
+  soe_marker_stale: boolean;
+  last_check: { status: string; detail: string; instance: string | null; checked_at: string; run_id: string } | null;
+}
+
+export interface Inventory {
+  prefix: string;
+  fetched_at: string;
+  instances: { inst_id: number; instance: string }[];
+  pdbs: InventoryPdb[];
+}
+
+export interface Plan {
+  type: string;
+  pdbs: string[];
+  count: number;
+  missing: string[];
+  not_open: string[];
+  warnings: string[];
+  example_connect: string;
+  equivalent_command: string;
+}
+
+export interface LogFile { index: number; label: string; name: string; exists: boolean; size: number }
+
 export const api = {
   health: () => request<{ status: string; version: string; mode: "real" | "simulate" }>("GET", "/api/health"),
   profiles: () => request<{ profiles: Profile[] }>("GET", "/api/profiles").then((r) => r.profiles),
@@ -67,4 +139,18 @@ export const api = {
   deleteProfile: (id: number) => request<void>("DELETE", `/api/profiles/${id}`),
   envCheck: (profileId?: number) =>
     request<EnvCheck>("GET", profileId ? `/api/env-check?profile_id=${profileId}` : "/api/env-check"),
+  pdbs: (prefix?: string) => request<Inventory>("GET", prefix ? `/api/pdbs?prefix=${encodeURIComponent(prefix)}` : "/api/pdbs"),
+  plan: (type: string, params: Params) =>
+    request<{ plan: Plan; params: Params }>("POST", "/api/runs", { type, params, dry_run: true }),
+  startRun: (type: string, params: Params, secrets: Record<string, string>) =>
+    request<{ run_id: string }>("POST", "/api/runs", { type, params, secrets }),
+  runs: (limit = 100) => request<{ runs: Run[] }>("GET", `/api/runs?limit=${limit}`).then((r) => r.runs),
+  activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),
+  run: (id: string) => request<Run>("GET", `/api/runs/${id}`),
+  items: (id: string) => request<{ items: RunItem[]; event_seq: number | null }>("GET", `/api/runs/${id}/items`),
+  cancel: (id: string) => request<{ cancelling: boolean }>("POST", `/api/runs/${id}/cancel`),
+  itemLog: (id: string, pdb: string, file = 0, tail = 500) =>
+    request<{ files: LogFile[]; file: number; lines: string[] }>(
+      "GET", `/api/runs/${id}/items/${encodeURIComponent(pdb)}/log?file=${file}&tail=${tail}`),
+  runLog: (id: string) => request<{ lines: string[] }>("GET", `/api/runs/${id}/log?tail=1000`),
 };

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import StatusBadge from "../components/StatusBadge";
+import { fmtDuration, fmtTime, RUN_TYPE_LABEL, RunBadge, secondsBetween } from "../components/states";
 import { useEnvCheck } from "./Environment";
 
 function pdbName(prefix: string, n: number) {
@@ -11,6 +12,8 @@ function pdbName(prefix: string, n: number) {
 export default function Dashboard() {
   const env = useEnvCheck();
   const { data: profiles } = useQuery({ queryKey: ["profiles"], queryFn: api.profiles });
+  const active = useQuery({ queryKey: ["active-run"], queryFn: api.activeRun, refetchInterval: 2000 });
+  const recent = useQuery({ queryKey: ["runs", 5], queryFn: () => api.runs(5), refetchInterval: 5000 });
   const p = profiles?.find((x) => x.is_active)?.params;
   const counts = { pass: 0, warn: 0, fail: 0, skip: 0 };
   env.data?.checks.forEach((c) => counts[c.status]++);
@@ -41,7 +44,21 @@ export default function Dashboard() {
 
         <section className="card">
           <h2>Active run</h2>
-          <p className="muted">No run in progress. Runs arrive with milestone M1.</p>
+          {active.data ? (() => {
+            const r = active.data;
+            const done = (r.counts.ok ?? 0) + (r.counts.failed ?? 0) + (r.counts.skipped ?? 0);
+            return (
+              <>
+                <p><RunBadge status={r.status} /> {RUN_TYPE_LABEL[r.type] ?? r.type}</p>
+                <p className="mono">{done} / {r.total} completed · {r.counts.failed ?? 0} failed · {fmtDuration(secondsBetween(r.started_at, null))}</p>
+                <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={r.total} aria-valuenow={done} aria-label="Active run progress">
+                  <div className="progress-ok" style={{ width: `${r.total ? ((r.counts.ok ?? 0) / r.total) * 100 : 0}%` }} />
+                  <div className="progress-fail" style={{ width: `${r.total ? ((r.counts.failed ?? 0) / r.total) * 100 : 0}%` }} />
+                </div>
+                <Link to={`/runs/${r.id}`}>Open live view →</Link>
+              </>
+            );
+          })() : <p className="muted">No run in progress.</p>}
         </section>
 
         <section className="card">
@@ -73,7 +90,22 @@ export default function Dashboard() {
 
       <section className="card">
         <h2>Recent runs</h2>
-        <p className="muted">Run history arrives with milestone M5.</p>
+        {recent.data?.length ? (
+          <table className="grid-table dense">
+            <tbody>
+              {recent.data.map((r) => (
+                <tr key={r.id}>
+                  <td><Link className="mono" to={`/runs/${r.id}`}>{r.id}</Link></td>
+                  <td>{RUN_TYPE_LABEL[r.type] ?? r.type}</td>
+                  <td><RunBadge status={r.status} /></td>
+                  <td className="mono">{r.counts.ok ?? 0} ok / {r.counts.failed ?? 0} failed of {r.total}</td>
+                  <td>{fmtTime(r.started_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <p className="muted">No runs yet.</p>}
+        <Link to="/runs">All runs →</Link>
       </section>
     </>
   );

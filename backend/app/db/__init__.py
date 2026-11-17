@@ -100,6 +100,109 @@ class Database:
                     "UPDATE profiles SET is_active = 1 WHERE id = (SELECT MIN(id) FROM profiles)")
         return True
 
+    # ---- runs -----------------------------------------------------------------------------
+    @staticmethod
+    def _run(row: sqlite3.Row | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        d = dict(row)
+        d["params"] = json.loads(d.pop("params_json"))
+        d["summary"] = json.loads(d.pop("summary_json") or "null")
+        return d
+
+    def insert_run(self, run: dict[str, Any], pdbs: list[str]) -> None:
+        with self.tx():
+            self.conn.execute(
+                "INSERT INTO runs(id, type, status, phase, profile_id, params_json, run_dir, retry_of, created_at, "
+                "started_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (run["id"], run["type"], run["status"], run.get("phase"), run.get("profile_id"),
+                 json.dumps(run["params"], sort_keys=True), run.get("run_dir"), run.get("retry_of"),
+                 run["created_at"], run.get("started_at")))
+            self.conn.executemany("INSERT INTO run_items(run_id, pdb, ord, state) VALUES (?,?,?, 'pending')",
+                                  [(run["id"], p, i) for i, p in enumerate(pdbs)])
+
+    RUN_FIELDS = {"status", "phase", "started_at", "ended_at", "summary", "message", "run_dir"}
+
+    def update_run(self, run_id: str, **fields: Any) -> None:
+        bad = set(fields) - self.RUN_FIELDS
+        if bad:
+            raise ValueError(f"unknown run fields {bad}")
+        if "summary" in fields:
+            fields["summary_json"] = json.dumps(fields.pop("summary"), sort_keys=True)
+        cols = ", ".join(f"{k} = ?" for k in fields)
+        self.conn.execute(f"UPDATE runs SET {cols} WHERE id = ?", (*fields.values(), run_id))
+
+    def get_run(self, run_id: str) -> dict[str, Any] | None:
+        return self._run(self.conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone())
+
+    def list_runs(self, limit: int = 50, type_: str | None = None) -> list[dict[str, Any]]:
+        if type_:
+            rows = self.conn.execute("SELECT * FROM runs WHERE type = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+                                     (type_, limit)).fetchall()
+        else:
+            rows = self.conn.execute("SELECT * FROM runs ORDER BY created_at DESC, id DESC LIMIT ?",
+                                     (limit,)).fetchall()
+        return [self._run(r) for r in rows]
+
+    def item_counts(self, run_id: str) -> dict[str, int]:
+        rows = self.conn.execute("SELECT state, COUNT(*) n FROM run_items WHERE run_id = ? GROUP BY state",
+                                 (run_id,)).fetchall()
+        return {r["state"]: r["n"] for r in rows}
+
+    ITEM_FIELDS = ("state", "con_uid", "check_status", "check_detail", "instance", "pid", "pgid", "proc_starttime",
+                   "exit_code", "started_at", "ended_at", "detail", "error_count", "first_error")
+
+    def get_items(self, run_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM run_items WHERE run_id = ? ORDER BY ord", (run_id,)).fetchall()
+        return [{k: r[k] for k in r.keys() if k != "run_id"} for r in rows]
+
+    def get_item(self, run_id: str, pdb: str) -> dict[str, Any] | None:
+        r = self.conn.execute("SELECT * FROM run_items WHERE run_id = ? AND pdb = ?", (run_id, pdb)).fetchone()
+        return None if r is None else {k: r[k] for k in r.keys() if k != "run_id"}
+
+    def update_items(self, run_id: str, items: list[dict[str, Any]]) -> None:
+        """Write full item rows (all ITEM_FIELDS) in one transaction."""
+        cols = ", ".join(f"{k} = ?" for k in self.ITEM_FIELDS)
+        with self.tx():
+            self.conn.executemany(
+                f"UPDATE run_items SET {cols} WHERE run_id = ? AND pdb = ?",
+                [(*(it.get(k) for k in self.ITEM_FIELDS), run_id, it["pdb"]) for it in items])
+
+    def mark_interrupted(self) -> list[str]:
+        """Startup recovery: runs left 'running' by a previous backend process."""
+        ids = [r["id"] for r in self.conn.execute("SELECT id FROM runs WHERE status = 'running'").fetchall()]
+        now = utcnow()
+        with self.tx():
+            for rid in ids:
+                self.conn.execute(
+                    "UPDATE runs SET status = 'interrupted', ended_at = COALESCE(ended_at, ?), "
+                    "message = 'The backend stopped while this run was in progress.' WHERE id = ?", (now, rid))
+                self.conn.execute("UPDATE run_items SET state = 'not_started' WHERE run_id = ? AND state = 'pending'",
+                                  (rid,))
+                self.conn.execute(
+                    "UPDATE run_items SET state = 'cancelled', detail = 'backend stopped while this was running"
+                    "' || CASE WHEN pid IS NOT NULL THEN ' (pid ' || pid || ')' ELSE '' END "
+                    "WHERE run_id = ? AND state IN ('checking', 'running')", (rid,))
+        return ids
+
+    # ---- per-PDB state kept across runs ----------------------------------------------------
+    def upsert_last_check(self, pdb: str, status: str, detail: str, instance: str | None, run_id: str) -> None:
+        self.conn.execute(
+            "INSERT INTO last_checks(pdb, status, detail, instance, checked_at, run_id) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(pdb) DO UPDATE SET status = excluded.status, detail = excluded.detail, "
+            "instance = excluded.instance, checked_at = excluded.checked_at, run_id = excluded.run_id",
+            (pdb, status, detail, instance, utcnow(), run_id))
+
+    def last_checks(self, prefix: str) -> dict[str, dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM last_checks WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
+                                 (prefix,)).fetchall()
+        return {r["pdb"]: dict(r) for r in rows}
+
+    def soe_markers(self, prefix: str) -> dict[str, dict[str, Any]]:
+        rows = self.conn.execute("SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
+                                 (prefix,)).fetchall()
+        return {r["pdb"]: dict(r) for r in rows}
+
     # ---- audit ----------------------------------------------------------------------------
     def audit(self, actor: str, action: str, run_id: str | None = None,
               params: dict[str, Any] | None = None) -> None:

@@ -1,67 +1,303 @@
 {
   "_comment": "Shared test vectors for backend/app/validators.py and frontend/src/validators.ts. Each rule lists values that must pass and values that must fail.",
   "prefix": {
-    "valid": ["PDBPP", "pdbpp", "A", "Pdb_1", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"],
-    "invalid": ["", "1PDB", "_PDB", "PDB-PP", "PDB PP", "PDB$", "ABCDEFGHIJKLMNOPQRSTUVWXYZA", "PDB'X", true]
+    "valid": [
+      "PDBPP",
+      "pdbpp",
+      "A",
+      "Pdb_1",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    ],
+    "invalid": [
+      "",
+      "1PDB",
+      "_PDB",
+      "PDB-PP",
+      "PDB PP",
+      "PDB$",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZA",
+      "PDB'X",
+      true
+    ]
   },
   "pdb_number": {
-    "valid": ["1", "7", "250", "999", 1, 999],
-    "invalid": ["0", "007", "1000", "-1", "1.5", "", " 1", "abc", 0, 1000, true]
+    "valid": [
+      "1",
+      "7",
+      "250",
+      "999",
+      1,
+      999
+    ],
+    "invalid": [
+      "0",
+      "007",
+      "1000",
+      "-1",
+      "1.5",
+      "",
+      " 1",
+      "abc",
+      0,
+      1000,
+      true
+    ]
   },
   "positive_int": {
-    "valid": ["1", "16", "100000", 16],
-    "invalid": ["0", "01", "-3", "1.0", "", "x", 0, -1, false]
+    "valid": [
+      "1",
+      "16",
+      "100000",
+      16
+    ],
+    "invalid": [
+      "0",
+      "01",
+      "-3",
+      "1.0",
+      "",
+      "x",
+      0,
+      -1,
+      false
+    ]
   },
   "scan_host": {
-    "valid": ["scaqaq01-scan1.us.oracle.com", "localhost", "10.0.0.1", "a_b"],
-    "invalid": ["", "host name", "host;rm", "host/x", "host:1521", "h\nx"]
+    "valid": [
+      "scaqaq01-scan1.us.oracle.com",
+      "localhost",
+      "10.0.0.1",
+      "a_b"
+    ],
+    "invalid": [
+      "",
+      "host name",
+      "host;rm",
+      "host/x",
+      "host:1521",
+      "h\nx"
+    ]
   },
   "scan_port": {
-    "valid": ["1521", "1", "65535", 1521],
-    "invalid": ["0", "65536", "", "15a", "-1", 0, 70000]
+    "valid": [
+      "1521",
+      "1",
+      "65535",
+      1521
+    ],
+    "invalid": [
+      "0",
+      "65536",
+      "",
+      "15a",
+      "-1",
+      0,
+      70000
+    ]
   },
   "service_suffix": {
-    "valid": ["", ".us.oracle.com", "_x", "-svc"],
-    "invalid": [" .x", ".us/oracle", "a;b", "'x'"]
+    "valid": [
+      "",
+      ".us.oracle.com",
+      "_x",
+      "-svc"
+    ],
+    "invalid": [
+      " .x",
+      ".us/oracle",
+      "a;b",
+      "'x'"
+    ]
   },
   "scale": {
-    "valid": ["0.1", "1", "5", ".5", "10.25", 0.1, 5],
-    "invalid": ["0", "0.0", "", "-1", "1e3", "1.", "abc", 0]
+    "valid": [
+      "0.1",
+      "1",
+      "5",
+      ".5",
+      "10.25",
+      0.1,
+      5
+    ],
+    "invalid": [
+      "0",
+      "0.0",
+      "",
+      "-1",
+      "1e3",
+      "1.",
+      "abc",
+      0
+    ]
   },
   "tablespace": {
-    "valid": ["SOETBS", "soe_tbs", "T$1", "T#2"],
-    "invalid": ["", "1TBS", "SOE TBS", "SOE-TBS", "SOE;DROP"]
+    "valid": [
+      "SOETBS",
+      "soe_tbs",
+      "T$1",
+      "T#2"
+    ],
+    "invalid": [
+      "",
+      "1TBS",
+      "SOE TBS",
+      "SOE-TBS",
+      "SOE;DROP"
+    ]
   },
   "runtime": {
-    "valid": ["00:30", "1:00", "10:15", "00:00:30"],
-    "invalid": ["30", "00:3", "000:30", "00:30:", "1h", ""]
+    "valid": [
+      "00:30",
+      "1:00",
+      "10:15",
+      "00:00:30"
+    ],
+    "invalid": [
+      "30",
+      "00:3",
+      "000:30",
+      "00:30:",
+      "1h",
+      ""
+    ]
   },
   "disable_txns": {
-    "valid": ["", "SQ,WQ,WA", "SQ", "SQ,"],
-    "invalid": ["SQ WQ", "SQ;WQ", "SQ-WQ", "'SQ'"]
+    "valid": [
+      "",
+      "SQ,WQ,WA",
+      "SQ",
+      "SQ,"
+    ],
+    "invalid": [
+      "SQ WQ",
+      "SQ;WQ",
+      "SQ-WQ",
+      "'SQ'"
+    ]
   },
   "start_delay": {
-    "valid": ["0", "0.5", "2", "10.25", 0, 0.5],
-    "invalid": ["-1", "", ".5", "1e2", "abc", -0.5]
+    "valid": [
+      "0",
+      "0.5",
+      "2",
+      "10.25",
+      0,
+      0.5
+    ],
+    "invalid": [
+      "-1",
+      "",
+      ".5",
+      "1e2",
+      "abc",
+      -0.5
+    ]
   },
   "boolean": {
-    "valid": [true, false, "true", "false"],
-    "invalid": ["yes", "1", 1, 0, ""]
+    "valid": [
+      true,
+      false,
+      "true",
+      "false"
+    ],
+    "invalid": [
+      "yes",
+      "1",
+      1,
+      0,
+      ""
+    ]
   },
   "abs_path": {
-    "valid": ["/home/oracle/swingbench/bin/charbench", "/x", "/path with space/x"],
-    "invalid": ["", "bin/charbench", "./oewizard", "~/x", "/a\nb"]
+    "valid": [
+      "/home/oracle/swingbench/bin/charbench",
+      "/x",
+      "/path with space/x"
+    ],
+    "invalid": [
+      "",
+      "bin/charbench",
+      "./oewizard",
+      "~/x",
+      "/a\nb"
+    ]
   },
   "password": {
-    "valid": ["Welcome1", "We\"lcome", "p@ss w0rd!", "x"],
-    "invalid": ["", "a\nb", "a\rb", "a\u0000b"]
+    "valid": [
+      "Welcome1",
+      "We\"lcome",
+      "p@ss w0rd!",
+      "x"
+    ],
+    "invalid": [
+      "",
+      "a\nb",
+      "a\rb",
+      "a\u0000b"
+    ]
   },
   "quoted_password": {
-    "valid": ["Welcome1", "p@ss w0rd!", "it's"],
-    "invalid": ["", "We\"lcome", "\"", "a\nb"]
+    "valid": [
+      "Welcome1",
+      "p@ss w0rd!",
+      "it's"
+    ],
+    "invalid": [
+      "",
+      "We\"lcome",
+      "\"",
+      "a\nb"
+    ]
   },
   "profile_name": {
-    "valid": ["default", "Exa X10M lab", "sim-1", "a.b_c"],
-    "invalid": ["", " ", "-x", "a/b", "a;b"]
+    "valid": [
+      "default",
+      "Exa X10M lab",
+      "sim-1",
+      "a.b_c"
+    ],
+    "invalid": [
+      "",
+      " ",
+      "-x",
+      "a/b",
+      "a;b"
+    ]
+  },
+  "pdb_names": {
+    "valid": [
+      [
+        "PDBPP_001"
+      ],
+      [
+        "pdbpp_250",
+        "PDBPP_007"
+      ],
+      [
+        "A_999"
+      ]
+    ],
+    "invalid": [
+      [],
+      "PDBPP_001",
+      [
+        "PDBPP_1"
+      ],
+      [
+        "PDBPP_000"
+      ],
+      [
+        "1PDB_001"
+      ],
+      [
+        "PDBPP_001;"
+      ],
+      [
+        7
+      ],
+      [
+        "PDB PP_001"
+      ]
+    ]
   }
 }

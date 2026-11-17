@@ -34,6 +34,7 @@ PATTERNS = [
     ("tde", re.compile(r"ADMINISTER\s+KEY\s+MANAGEMENT", re.I)),
     ("grant", re.compile(r"GRANT\s+DBA\s+TO\s+soe\b", re.I)),
     ("env", re.compile(r"'ENV_CHECK\|'")),
+    ("inventory_detail", re.compile(r"'PDB\|'.*?LIKE\s+'([A-Za-z0-9_]+)%'", re.I | re.S)),
     ("inventory", re.compile(r"FROM\s+gv\$pdbs\s+WHERE\s+name\s+LIKE\s+'([A-Za-z0-9_]+)%'", re.I)),
 ]
 
@@ -67,6 +68,16 @@ def handle(kind, m, ctx):
                     p = st["pdbs"][name]
                     rw = sum(1 for o in p["open"] if o == "READ WRITE")
                     sim.out("%s|%s|%d" % (name, p["con_uid"], rw))
+        return
+    if kind == "inventory_detail":
+        prefix = m.group(1).upper()
+        instances = sim.SCENARIO["cdb"].get("instances", ["inst1"])
+        with sim.locked_state() as st:
+            for name in sorted(st["pdbs"]):
+                if name.startswith(prefix):
+                    p = st["pdbs"][name]
+                    for i, mode in enumerate(p["open"]):
+                        sim.out("PDB|%s|%s|%d|%s|%s|NO" % (name, p["con_uid"], i + 1, mode, instances[i]))
         return
     if kind == "plsql":
         # The drop helper block: close the PDB if it is open anywhere.

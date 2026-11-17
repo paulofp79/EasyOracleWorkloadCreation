@@ -11,9 +11,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import validators as v
-from .api import env, profiles
+from .api import env, pdbs, profiles, runs
 from .config import FRONTEND_DIST, STUB_DIR, Settings, load_settings
 from .db import Database
+from .engine.runs import RunManager
 
 log = logging.getLogger("orchestrator")
 
@@ -44,8 +45,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = Database(settings.db_path)
         seed_profiles(db, settings)
         app.state.db = db
+        app.state.runs = RunManager(settings, db)
+        app.state.runs.recover()
         log.info("mode=%s db=%s", settings.mode, settings.db_path)
         yield
+        await app.state.runs.shutdown()
         db.close()
 
     app = FastAPI(title="PDB Swingbench Orchestrator", lifespan=lifespan, docs_url="/api/docs",
@@ -73,6 +77,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(env.router)
     app.include_router(profiles.router)
+    app.include_router(pdbs.router)
+    app.include_router(runs.router)
 
     @app.get("/{path:path}", include_in_schema=False)
     async def spa(path: str):

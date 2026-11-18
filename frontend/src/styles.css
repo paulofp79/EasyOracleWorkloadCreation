@@ -296,3 +296,6 @@ a.btn { text-decoration: none; display: inline-block; }
 .row-diff { background: var(--warn-bg); }
 .cmp-cell { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .audit-params { max-width: 52rem; overflow-wrap: anywhere; }
+.active-run { padding: .4rem 0; border-bottom: 1px solid var(--border, #e5e7eb); }
+.active-run:last-of-type { border-bottom: 0; }
+.active-run p { margin: .15rem 0; }

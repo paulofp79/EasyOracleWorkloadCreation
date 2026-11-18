@@ -26,6 +26,7 @@ alive and offers **Kill leftovers**.
 | Variable | Default | Meaning |
 |---|---|---|
 | `ORCH_HOST` / `ORCH_PORT` | `127.0.0.1` / `8080` | bind address; a non-loopback address turns on login and HTTPS |
+| `ORCH_MAX_RUNS` | `10` | runs active at the same time (1–100); 1 = the old one-run-at-a-time behaviour |
 | `ORCH_TLS` | `auto` | `on`, or `off` behind a reverse proxy that terminates HTTPS |
 | `ORCH_TLS_CERT` / `ORCH_TLS_KEY` | self-signed in `~/.pdb-orchestrator/tls/` | your certificate and key (PEM) |
 | `ORCH_AUTH` | off on localhost | `on` requires login on localhost too |
@@ -118,3 +119,18 @@ loaded in each PDB.
   on the app host while those processes run. Limit who can log in to that host.
 * Every value that reaches SQL or a command line is validated server-side; commands are argument lists
   (no shell); there is no endpoint that runs arbitrary SQL.
+
+## Runs at the same time
+
+Several runs can be active at once (up to `ORCH_MAX_RUNS`, default 10). A run is refused, naming the
+run that blocks it, only when it would clash on a PDB:
+
+| New run \ active run on the same PDB | Check | Workload (schema S) | Load (schema S) | Create / Drop |
+|---|---|---|---|---|
+| Check | ok | ok | ok | refused |
+| Workload on S | ok | ok | refused | refused |
+| Load of S | ok | refused | refused | refused |
+| Create / Drop | refused | refused | refused | refused |
+
+Loads or workloads on *different* schemas (e.g. SOE and BATCH1_SOE) of the same PDB may overlap. Every
+run keeps its own log directory, live view and Stop button; the dashboard lists all active runs.

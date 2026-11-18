@@ -204,7 +204,7 @@ flowchart TB
         SSE["SSE endpoints<br/>run events, live log tail"]
         VAL["validators.py<br/>shared rules"]
         subgraph ENG["Run engine"]
-            RM["RunManager<br/>one active run, recovery"]
+            RM["RunManager<br/>concurrent runs, PDB conflicts, recovery"]
             CTX["RunContext<br/>item state, 250 ms flush"]
             BUS["EventBus<br/>seq numbers, replay buffer"]
             PR["ProcessRunner<br/>process groups, stdin, redaction,<br/>timeouts, kill"]
@@ -255,7 +255,7 @@ flowchart TB
 | Operations | One class per run type: validate, `plan()` (dry run), `execute()`; same behaviour as the reference scripts |
 | Builders | Generate SQL text and argument lists; golden tests compare them with the scripts' heredocs |
 | SysdbaConn | Privileged logon: `/ as sysdba` or `CONNECT sys/"…"@//scan/service AS SYSDBA` plus a session marker check |
-| RunManager / RunContext | One active run, item state machine, batched persistence and events, cancel, startup recovery |
+| RunManager / RunContext | Concurrent runs with per-PDB conflict rules (`ORCH_MAX_RUNS`), item state machine, batched persistence and events, cancel, startup recovery |
 | EventBus | Ordered events with sequence numbers, replay on reconnect, resync when too old |
 | ProcessRunner | Starts every tool in its own session/process group, feeds secrets on stdin, redacts output into 0600 logs, enforces timeouts, kills groups |
 | Leftovers | After a crash: finds recorded processes still alive (pid + start time or process group), kills them on request |
@@ -827,7 +827,7 @@ flowchart TB
 
 | Topic | Constraint |
 |---|---|
-| Scale | One CDB and one application host per installation; one active run at a time |
+| Scale | One CDB and one application host per installation; up to `ORCH_MAX_RUNS` (10) runs at once, conflicting runs on the same PDB refused |
 | Platform | Linux x86_64, Python 3.11, SQL*Plus on the host; Swingbench and Java where the app runs |
 | Credentials | oewizard and charbench accept passwords only as arguments (visible in `ps`) |
 | Results | Swingbench result XML is downloaded, not parsed; comparisons use exit codes, durations and log errors |

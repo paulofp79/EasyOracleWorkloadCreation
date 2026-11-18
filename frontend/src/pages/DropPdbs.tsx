@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import FormError from "../components/FormError";
 import { api, ApiError, type Plan } from "../api/client";
 import DropConfirm from "../components/DropConfirm";
 import { FormField } from "../components/FormField";
@@ -95,7 +96,7 @@ export default function DropPdbs() {
             )}
           </div>
         )}
-        {formError && <div className="error-box">{formError}</div>}
+        <FormError text={formError} />
         <div className="actions">
           <button type="button" className="btn" disabled={Object.keys(clientErrors).length > 0 || planM.isPending} onClick={() => planM.mutate()}>
             {planM.isPending ? "Planning…" : plan ? "Plan again" : "Plan / dry run"}

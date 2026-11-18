@@ -145,18 +145,6 @@ def test_dry_run_needs_no_secret_and_reports_plan(client):
     assert client.get("/api/runs").json()["runs"] == []      # nothing started
 
 
-def test_one_active_run_at_a_time(sim_settings):
-    scenario(sim_settings, delays={"check_ok": 0.5})
-    with TestClient(create_app(sim_settings)) as c:
-        rid = start(c, {"first": 1, "last": 10, "check_parallel": 1})
-        r = c.post("/api/runs", json={"type": "check", "params": {}, "secrets": {"soe_password": "x"}})
-        assert r.status_code == 409 and r.json()["run_id"] == rid
-        assert c.get("/api/runs/active").json()["run"]["id"] == rid
-        c.post(f"/api/runs/{rid}/cancel")
-        wait(c, rid)
-        assert c.get("/api/runs/active").json()["run"] is None
-
-
 def test_cancel_kills_hanging_checks(sim_settings):
     hang = {f"PDBPP_{i:03d}": {"check": "hang"} for i in range(1, 41)}
     scenario(sim_settings, pdb_scenarios=hang)

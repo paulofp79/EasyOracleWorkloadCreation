@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import FormError from "../components/FormError";
 import { api, ApiError, type Plan } from "../api/client";
 import DropConfirm from "../components/DropConfirm";
 import { FormField } from "../components/FormField";
@@ -161,7 +162,7 @@ export default function CreatePdbs() {
             </div>
           </div>
         )}
-        {formError && <div className="error-box">{formError}</div>}
+        <FormError text={formError} />
         <div className="actions">
           <button type="button" className="btn" disabled={hasErrors || wallet === null || planM.isPending}
                   title={wallet === null ? "Choose the TDE option first" : undefined} onClick={() => planM.mutate()}>

@@ -108,8 +108,9 @@ def list_runs(request: Request, limit: int = 50, offset: int = 0, type: str | No
 
 @router.get("/active")
 def active_run(request: Request):
-    ctx = manager(request).active
-    return {"run": manager(request).run_view(ctx.run_id) if ctx else None}
+    m = manager(request)
+    runs = [m.run_view(rid) for rid in list(m.active)]
+    return {"run": runs[0] if runs else None, "runs": runs, "max_runs": m.settings.max_runs}
 
 
 @router.get("/compare")
@@ -273,8 +274,7 @@ async def item_log_stream(run_id: str, pdb: str, request: Request, file: int = 0
                 idle = 0
             else:
                 idle += 1
-                ctx = m.active
-                if not (ctx and ctx.run_id == run_id) and idle > 2:
+                if run_id not in m.active and idle > 2:
                     yield sse(None, "end", {})
                     return
                 if idle % 30 == 0:

@@ -9,6 +9,7 @@ import Check from "./pages/Check";
 import Compare from "./pages/Compare";
 import CreatePdbs from "./pages/CreatePdbs";
 import DropPdbs from "./pages/DropPdbs";
+import IncreaseSoe from "./pages/IncreaseSoe";
 import LoadSoe from "./pages/LoadSoe";
 import Dashboard from "./pages/Dashboard";
 import Environment from "./pages/Environment";
@@ -24,6 +25,7 @@ const NAV: { to: string; label: string; milestone?: string }[] = [
   { to: "/pdbs", label: "PDBs" },
   { to: "/create", label: "Create PDBs" },
   { to: "/load", label: "Load SOE" },
+  { to: "/increase", label: "Increase SOE" },
   { to: "/check", label: "Check connections" },
   { to: "/workload", label: "Run workload" },
   { to: "/runs", label: "Runs" },
@@ -156,6 +158,7 @@ function Shell({ user }: { user: string | null }) {
             <Route path="/create" element={<CreatePdbs />} />
             <Route path="/drop" element={<DropPdbs />} />
             <Route path="/load" element={<LoadSoe />} />
+            <Route path="/increase" element={<IncreaseSoe />} />
             <Route path="/workload" element={<Workload />} />
             <Route path="/runs" element={<Runs />} />
             <Route path="/runs/compare" element={<Compare />} />

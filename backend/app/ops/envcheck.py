@@ -156,6 +156,7 @@ async def run_env_check(settings: Settings, params: dict[str, Any], sys_password
     checks.append(c)
 
     checks.append(check_executable("oewizard", "oewizard executable", params["oewizard_path"]))
+    checks.append(check_executable("sbutil", "sbutil executable (Increase SOE)", params["sbutil_path"]))
     checks.append(check_executable("charbench", "charbench executable", params["charbench_path"]))
     checks.append(check_readable("config_xml", "Swingbench config XML readable", params["config_xml"]))
     checks.append(check_log_dir(params["log_dir"]))

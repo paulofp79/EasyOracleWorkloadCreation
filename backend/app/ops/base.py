@@ -113,6 +113,11 @@ class Operation:
             if bad:
                 raise v.ValidationError({"pdbs": f"not in prefix {params['prefix']}: {', '.join(bad[:5])}"})
 
+    @classmethod
+    def retry_params(cls, params: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+        """Parameters of a retry run limited to the items (PDBs) that did not finish OK."""
+        return {**params, "pdbs": keys}
+
     # ---- behaviour -----------------------------------------------------------------------
     def targets(self) -> list[str]:
         if self.params.get("pdbs"):

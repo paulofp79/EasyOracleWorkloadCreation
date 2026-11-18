@@ -32,6 +32,7 @@ def seed_profiles(db: Database, settings: Settings) -> None:
         params.update(
             scan_host="sim-scan.example.com",
             oewizard_path=str(STUB_DIR / "oewizard"),
+            sbutil_path=str(STUB_DIR / "sbutil"),
             charbench_path=str(STUB_DIR / "charbench"),
             config_xml=str(STUB_DIR / "sim-swingbench" / "configs" / "SOE_Server_Side_V2.xml"),
             log_dir=str(settings.sim_root / "logs"),

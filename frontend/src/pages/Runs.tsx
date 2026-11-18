@@ -9,9 +9,10 @@ const STATUSES = ["running", "ok", "failed", "cancelled", "interrupted", "blocke
 
 function describe(r: Run): string {
   const p = r.params ?? {};
-  const scope = p.pdbs?.length ? `${p.pdbs.length} selected` : p.first ? `${p.prefix}_${String(p.first).padStart(3, "0")}…${String(p.last).padStart(3, "0")}` : "";
+  const scope = p.targets?.length ? `${p.targets.length} selected` : p.pdbs?.length ? `${p.pdbs.length} selected` : p.first ? `${p.prefix}_${String(p.first).padStart(3, "0")}…${String(p.last).padStart(3, "0")}` : "";
   const extra = r.type === "workload" ? `${p.users} users · ${p.runtime}`
     : r.type === "load" ? `scale ${p.scale} · ${p.parallel} parallel`
+    : r.type === "increase" ? `${(p.schemas ?? []).map((s: string) => (s ? `${s}_SOE` : "SOE")).join(", ")} · -dup ${p.dup} · ${p.parallel} parallel`
     : r.type === "create" ? `TDE ${p.use_wallet ? "on" : "off"}` : "";
   const schema = p.schema_prefix ? `${String(p.schema_prefix).toUpperCase()}_SOE` : "";
   return [scope, schema, extra].filter(Boolean).join(" · ");

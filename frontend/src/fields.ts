@@ -26,6 +26,10 @@ export const FIELD_UI: Record<string, FieldUi> = {
   parallel: { label: "Parallel loads", group: "Load SOE", hint: "Default for Load SOE: PDBs loading at the same time (1 = one after another)" },
   keep_going: { label: "Keep going after a failure", group: "Load SOE" },
   oewizard_path: { label: "oewizard path", group: "Load SOE" },
+  sbutil_path: { label: "sbutil path", group: "Increase SOE" },
+  sbutil_dup: { label: "Duplicate (-dup)", group: "Increase SOE", hint: "Times the data is duplicated" },
+  sbutil_parallel: { label: "sbutil parallel (-parallel)", group: "Increase SOE", hint: "Degree of parallelism inside one sbutil" },
+  grow_parallel: { label: "Schemas at the same time", group: "Increase SOE", hint: "sbutil processes running at once (1 = one after another)" },
   check_timeout: { label: "Timeout", group: "Connection check", unit: "s" },
   check_parallel: { label: "Parallel checks", group: "Connection check" },
   skip_unreachable: { label: "Skip unreachable PDBs", group: "Connection check", hint: "Off = any failed check aborts the workload" },
@@ -40,4 +44,4 @@ export const FIELD_UI: Record<string, FieldUi> = {
   log_dir: { label: "Log / run directory", group: "Storage" },
 };
 
-export const GROUPS = ["Common", "Connection", "Create", "Load SOE", "Connection check", "Workload", "Storage"];
+export const GROUPS = ["Common", "Connection", "Create", "Load SOE", "Increase SOE", "Connection check", "Workload", "Storage"];

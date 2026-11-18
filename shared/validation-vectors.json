@@ -381,5 +381,86 @@
       "ABCDEFGHIJKLMNOPQRSTUVWXYZA",
       "B'X"
     ]
+  },
+  "schema_prefixes": {
+    "valid": [
+      [
+        ""
+      ],
+      [
+        "BATCH1"
+      ],
+      [
+        "",
+        "BATCH1",
+        "batch_2"
+      ],
+      [
+        "B",
+        "b"
+      ]
+    ],
+    "invalid": [
+      [],
+      "BATCH1",
+      [
+        "",
+        " "
+      ],
+      [
+        "1BATCH"
+      ],
+      [
+        "BATCH-1"
+      ],
+      [
+        "B'X"
+      ],
+      [
+        1
+      ],
+      [
+        null
+      ],
+      [
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZA"
+      ]
+    ]
+  },
+  "schema_targets": {
+    "valid": [
+      [
+        "PDBPP_001:SOE"
+      ],
+      [
+        "PDBPP_001:BATCH1_SOE",
+        "pdbpp_002:soe"
+      ]
+    ],
+    "invalid": [
+      [],
+      "PDBPP_001:SOE",
+      [
+        "PDBPP_001"
+      ],
+      [
+        "PDBPP_000:SOE"
+      ],
+      [
+        "PDBPP_001:BATCH1"
+      ],
+      [
+        "PDBPP_001:SOE;"
+      ],
+      [
+        "PDBPP_001/SOE"
+      ],
+      [
+        "PDBPP_001:X-Y_SOE"
+      ],
+      [
+        1
+      ]
+    ]
   }
 }

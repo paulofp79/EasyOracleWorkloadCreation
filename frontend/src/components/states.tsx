@@ -61,5 +61,5 @@ export function fmtTime(iso: string | null | undefined): string {
 }
 
 export const RUN_TYPE_LABEL: Record<string, string> = {
-  check: "Connection check", create: "Create PDBs", drop: "Drop PDBs", load: "Load SOE", workload: "Workload",
+  check: "Connection check", create: "Create PDBs", drop: "Drop PDBs", load: "Load SOE", increase: "Increase SOE", workload: "Workload",
 };

@@ -32,6 +32,18 @@ const PDB_NAME = /^[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}$/;
 export const RULES: Record<string, Rule> = {
   schema_prefix: (v) => (v == null || v === "" || (typeof v === "string" && /^[A-Za-z][A-Za-z0-9_]{0,25}$/.test(v)) ? null
     : "must start with a letter and use letters, digits and underscore (max 26), or be empty for SOE"),
+  schema_prefixes: (v) => {
+    if (!Array.isArray(v) || v.length === 0) return "must be a non-empty list of schema prefixes ('' for SOE)";
+    if (v.length > 50) return "at most 50 schemas";
+    const bad = v.find((x) => typeof x !== "string" || (x !== "" && !/^[A-Za-z][A-Za-z0-9_]{0,25}$/.test(x)));
+    return bad === undefined ? null : `${JSON.stringify(bad)} is not a schema prefix like BATCH1 ('' for SOE)`;
+  },
+  schema_targets: (v) => {
+    if (!Array.isArray(v) || v.length === 0) return "must be a non-empty list like PDBPP_001:SOE";
+    const bad = v.find((x) => typeof x !== "string" || !/^[A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}:(SOE|[A-Za-z][A-Za-z0-9_]{0,25}_SOE)$/i.test(x)
+      || x.split(":")[0].endsWith("_000"));
+    return bad === undefined ? null : `${JSON.stringify(bad)} is not an entry like PDBPP_001:SOE or PDBPP_001:BATCH1_SOE`;
+  },
   cdb_connect: (v) => (v === "local" || v === "remote" ? null : "must be local or remote"),
   cdb_service: (v) => (v == null ? null : re(/^[A-Za-z0-9._-]*$/, "may contain only letters, digits, '.', '_' and '-'")(v)),
   existing_action: (v) => (v === "drop" || v === "skip" || v === "abort" ? null : "must be drop, skip or abort"),

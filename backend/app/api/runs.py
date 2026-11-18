@@ -68,7 +68,7 @@ async def create_run(body: RunIn, request: Request):
         retry = [it["pdb"] for it in d.get_items(body.retry_of) if it["state"] in RETRY_STATES]
         if not retry:
             raise v.ValidationError({"retry_of": "nothing to retry: every PDB finished OK or was skipped"})
-        params = {**old["params"], "pdbs": retry}
+        params = op_cls.retry_params(old["params"], retry)
         profile = d.active_profile()        # only fills fields that did not exist when the run was made
     else:
         profile = d.get_profile(body.profile_id) if body.profile_id is not None else d.active_profile()

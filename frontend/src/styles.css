@@ -211,6 +211,8 @@ select, input {
 .tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .tile-selected { box-shadow: 0 0 0 2px var(--accent); }
 .tile-num { font-family: var(--mono); font-weight: 700; font-size: .85rem; }
+.tile-schema { display: block; font-size: .55rem; font-weight: 500; max-width: 3.3rem; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; text-align: center; }
 .tile-state { font-size: .62rem; font-weight: 700; display: flex; gap: .15rem; letter-spacing: .02em; }
 .tile.st-checking .tile-state span, .tile.st-running .tile-state span { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
@@ -296,3 +298,5 @@ a.btn { text-decoration: none; display: inline-block; }
 .row-diff { background: var(--warn-bg); }
 .cmp-cell { display: inline-flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .audit-params { max-width: 52rem; overflow-wrap: anywhere; }
+.schema-picks { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+.schema-pick { display: inline-flex; align-items: baseline; gap: .25rem; font-weight: 400; }

@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Simulated Swingbench sbutil: sbutil -u soe -p pw -cs //h:p/svc -soe -parallel 32 -dup 2
+
+Only the -dup (increase the SOE schema) form is supported. The state records how often each
+schema was duplicated (soe_dup: {schema: total -dup count}).
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _simlib as sim  # noqa: E402
+
+
+def main():
+    argv = sys.argv[1:]
+    if "-h" in argv or "-help" in argv:
+        sim.out("usage: sbutil [options] (simulated)")
+        return 0
+    cs = sim.arg_value(argv, "-cs")
+    pdb = sim.pdb_from_connect(cs)
+    user = (sim.arg_value(argv, "-u") or "").upper()
+    dup = sim.arg_value(argv, "-dup")
+    par = sim.arg_value(argv, "-parallel") or "1"
+    if "-soe" not in argv or not dup or not dup.isdigit() or int(dup) < 1:
+        sim.out("Invalid arguments (simulated sbutil only supports -soe ... -dup <n>)")
+        return 1
+    if not pdb or not user or not sim.arg_value(argv, "-p"):
+        sim.out("Invalid arguments")
+        return 1
+    with sim.locked_state() as st:
+        p = st["pdbs"].get(pdb)
+    if not p or "READ WRITE" not in p["open"]:
+        sim.out("java.sql.SQLRecoverableException: Listener refused the connection with the following error:",
+                "ORA-12514, TNS:listener does not currently know of service requested in connect descriptor")
+        return 1
+    if user not in sim.schemas(p):
+        sim.out("java.sql.SQLException: ORA-01017: invalid username/password; logon denied")
+        return 1
+    sim.out("Swingbench Utility (simulated)", "Connecting to : jdbc:oracle:thin:@%s" % cs,
+            "Duplicating data %s time(s) using %s parallel threads" % (dup, par))
+    total = float(sim.SCENARIO.get("delays", {}).get("sbutil", 3.0))
+    tables = ["CUSTOMERS", "ADDRESSES", "CARD_DETAILS", "ORDERS", "ORDER_ITEMS"]
+    for i, t in enumerate(tables):
+        sim.sim_sleep(total / len(tables))
+        sim.out("Duplicating table %s ... done" % t)
+        if sim.pdb_scenario(pdb, "grow") == "fail" and i == 2:
+            sim.out("java.sql.SQLException: ORA-01653: unable to extend table %s.ORDERS by 8192 in tablespace SOETBS"
+                    % user)
+            return 1
+    sim.out("Rebuilding indexes ... done", "Gathering statistics ... done", "Completed Run.")
+    with sim.locked_state(write=True) as st:
+        if pdb in st["pdbs"]:
+            grown = st["pdbs"][pdb].setdefault("soe_dup", {})
+            grown[user] = grown.get(user, 0) + int(dup)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

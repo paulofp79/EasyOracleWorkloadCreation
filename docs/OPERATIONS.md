@@ -91,6 +91,26 @@ Load SOE → **Schema prefix** `BATCH1` creates and loads user `BATCH1_SOE` next
 same prefix on Check connections and Run workload to drive that schema. The PDBs page lists the schemas
 loaded in each PDB.
 
+## Increasing existing SOE schemas
+
+**Increase SOE** runs, for every picked schema in every PDB of the range (or the PDBs selected on the
+PDBs page):
+
+    sbutil -u <schema> -p <password> -cs //<scan>:<port>/<pdb service> -soe -parallel <P> -dup <N>
+
+* **Schemas**: tick one or several (the list shows the schemas this tool loaded, always SOE) and/or type
+  others, e.g. `BATCH3_SOE`. All picked schemas use the same password.
+* **Duplicate (-dup)** and **sbutil parallel (-parallel)** go to sbutil unchanged; profile defaults 2 and 32.
+* **Schemas at the same time**: how many sbutil processes run at once (profile default 1). The plan
+  shows the resulting sessions on the CDB (processes × -parallel).
+* Each schema is first checked (login and core tables, as Check connections does); a schema that does
+  not exist fails without running sbutil. sbutil output with `ORA-nnnnn`/`SQLException` counts as a
+  failure even when sbutil exits 0.
+* `-dup` is not idempotent: every run grows the schema again. **Retry failed** runs only the schemas
+  that failed or did not start. A failed sbutil may have duplicated part of the tables; look at its log
+  before retrying.
+* The SYS password is only needed in remote mode (the pre-flight check that the PDBs are open).
+
 ## Troubleshooting
 
 | Symptom | Meaning / fix |

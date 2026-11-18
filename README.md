@@ -22,6 +22,8 @@ check SOE connections and run one `charbench` workload per PDB at the same time:
   confirmed by typing `DELETE` against the exact list.
 * **Load SOE**: pre-flight, parallel loads with a limit, resume keyed by `con_uid`, keep-going, force,
   retry failed, import of `create_swingbench.sh` markers.
+* **Increase SOE**: grow existing schemas with `sbutil -soe -dup N -parallel P`, one schema or many
+  (SOE, BATCH1_SOE, …) across a PDB range or selection, several sbutil processes at a time.
 * **Check connections** and **Run workload**: parallel SOE login check, then one charbench per PDB,
   live 250-tile grid with per-PDB logs, Stop all, log scan for ORA-/TNS-/exception text.
 * **Runs**: history with filters, downloads (files, zip, CSV), comparison of two workload runs, crash

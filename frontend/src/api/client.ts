@@ -155,6 +155,9 @@ export interface Plan {
   example_connect?: string;
   schema_user?: string;
   tablespace?: string;
+  schemas?: string[];
+  pdb_count?: number;
+  unknown?: string[];
   equivalent_command: string;
 }
 

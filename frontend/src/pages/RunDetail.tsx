@@ -15,13 +15,14 @@ const DONE: ItemState[] = ["ok", "failed", "skipped", "not_started", "cancelled"
 const RETRY_SECRETS: Record<string, [string, string][]> = {
   check: [["soe_password", "SOE password"]],
   load: [["soe_password", "SOE password"], ["sys_password", "SYS password"]],
+  increase: [["soe_password", "Schema password"]],
 };
 const PHASE: Record<string, string> = {
   preflight: "pre-flight", check: "connection check", launch: "launching workloads", run: "workloads running",
-  summary: "scanning logs", drop: "dropping", create: "creating", load: "loading",
+  summary: "scanning logs", drop: "dropping", create: "creating", load: "loading", increase: "increasing (sbutil -dup)",
 };
 const SUMMARY_LABELS: Record<string, string> = {
-  loaded: "loaded", created: "created", dropped: "dropped", skipped: "skipped", existing: "existed before",
+  loaded: "loaded", increased: "increased", created: "created", dropped: "dropped", skipped: "skipped", existing: "existed before",
   checked: "checked", started: "workloads started", ok: "OK", failed: "failed", with_errors: "with error text", not_started: "not started", peak_running: "peak concurrency",
   elapsed_s: "elapsed (s)",
 };

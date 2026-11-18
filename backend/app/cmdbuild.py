@@ -14,6 +14,12 @@ def oewizard_argv(oewizard: str, connect: str, soe_password: str, scale: str, th
             "-ts", tablespace, "-async_off", "-v"]
 
 
+def sbutil_dup_argv(sbutil: str, connect: str, user: str, password: str, parallel: int, dup: int) -> list[str]:
+    """Increase an existing SOE schema: sbutil -u soe -p pw -cs //scan/svc -soe -parallel 32 -dup 2."""
+    return [sbutil, "-u", user, "-p", password, "-cs", connect, "-soe", "-parallel", str(parallel),
+            "-dup", str(dup)]
+
+
 def display(argv: list[str]) -> str:
     """Shell-quoted command with -p / -dbap values masked."""
     return " ".join(shlex.quote(a) for a in mask_argv(argv))

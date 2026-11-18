@@ -7,7 +7,9 @@ const Tile = memo(function Tile({ item, selected, onSelect }: {
 }) {
   const s = ITEM_STATE[item.state];
   const detail = item.detail || item.check_detail || "";
-  const num = item.pdb.slice(-3);
+  // Increase SOE with several schemas: items are PDBPP_001:BATCH1_SOE
+  const [pdbPart, schemaPart] = item.pdb.split(":");
+  const num = pdbPart.slice(-3);
   const errs = item.error_count ?? 0;
   const errText = errs ? `, ${errs} error line(s) in the log: ${item.first_error ?? ""}` : "";
   return (
@@ -19,7 +21,7 @@ const Tile = memo(function Tile({ item, selected, onSelect }: {
       aria-pressed={selected}
       onClick={() => onSelect(item.pdb)}
     >
-      <span className="tile-num">{num}{errs ? <span className="tile-err" aria-hidden="true">!</span> : null}</span>
+      <span className="tile-num">{num}{schemaPart ? <span className="tile-schema">{schemaPart === "SOE" ? "SOE" : schemaPart.replace(/_SOE$/, "")}</span> : null}{errs ? <span className="tile-err" aria-hidden="true">!</span> : null}</span>
       <span className="tile-state">
         <span aria-hidden="true">{s.icon}</span>
         {s.short}

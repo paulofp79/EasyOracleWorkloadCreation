@@ -249,6 +249,40 @@ def schema_prefix(v: Any) -> str:
     return s.upper()
 
 
+MAX_SCHEMAS = 50
+RE_SCHEMA_TARGET = re.compile(r"([A-Za-z][A-Za-z0-9_]{0,25}_[0-9]{3}):(SOE|[A-Za-z][A-Za-z0-9_]{0,25}_SOE)", re.I)
+
+
+def schema_prefixes(v: Any) -> list[str]:
+    """One or more schema prefixes ('' = SOE, BATCH1 = BATCH1_SOE): upper-cased, de-duplicated, order kept."""
+    if not isinstance(v, list) or not v:
+        raise RuleError("must be a non-empty list of schema prefixes ('' for SOE)")
+    if len(v) > MAX_SCHEMAS:
+        raise RuleError(f"at most {MAX_SCHEMAS} schemas")
+    out: list[str] = []
+    for item in v:
+        if not isinstance(item, str) or (item and not RE_SCHEMA_PREFIX.fullmatch(item)):
+            raise RuleError(f"{str(item)[:40]!r} is not a schema prefix like BATCH1 ('' for SOE)")
+        if item.upper() not in out:
+            out.append(item.upper())
+    return out
+
+
+def schema_targets(v: Any) -> list[str]:
+    """Explicit (PDB, schema) pairs as 'PDBPP_001:BATCH1_SOE' (used to retry single schemas)."""
+    if not isinstance(v, list) or not v:
+        raise RuleError("must be a non-empty list like PDBPP_001:SOE")
+    if len(v) > MAX_PDB_NUMBER * MAX_SCHEMAS:
+        raise RuleError("too many entries")
+    out: list[str] = []
+    for item in v:
+        if not isinstance(item, str) or not RE_SCHEMA_TARGET.fullmatch(item) or item.split(":")[0].endswith("_000"):
+            raise RuleError(f"{str(item)[:60]!r} is not an entry like PDBPP_001:SOE or PDBPP_001:BATCH1_SOE")
+        if item.upper() not in out:
+            out.append(item.upper())
+    return out
+
+
 def confirm_delete(v: Any) -> str:
     if v != "DELETE":
         raise RuleError("type DELETE to confirm")
@@ -262,6 +296,8 @@ RULES: dict[str, Callable[[Any], Any]] = {
     "confirm_delete": confirm_delete,
     "cdb_connect": cdb_connect,
     "schema_prefix": schema_prefix,
+    "schema_prefixes": schema_prefixes,
+    "schema_targets": schema_targets,
     "cdb_service": cdb_service,
     "prefix": prefix, "pdb_number": pdb_number, "positive_int": positive_int,
     "scan_host": scan_host, "scan_port": scan_port, "service_suffix": service_suffix,
@@ -292,6 +328,10 @@ PROFILE_FIELDS: dict[str, tuple[str, Any]] = {
     "parallel": ("positive_int", 1),
     "keep_going": ("boolean", False),
     "oewizard_path": ("abs_path", "/home/oracle/swingbench/bin/oewizard"),
+    "sbutil_path": ("abs_path", "/home/oracle/swingbench/bin/sbutil"),
+    "sbutil_dup": ("positive_int", 2),
+    "sbutil_parallel": ("positive_int", 32),
+    "grow_parallel": ("positive_int", 1),
     "check_timeout": ("positive_int", 30),
     "check_parallel": ("positive_int", 16),
     "skip_unreachable": ("boolean", False),

@@ -165,3 +165,19 @@ audit log records the logged-in user as actor.
   `last_checks.schema_user`. A load skips a PDB only when *that* schema is loaded there. Dropping a
   PDB removes all its markers. The inventory returns `soe_schemas` per PDB; the PDBs page lists them.
 * The scripts only know SOE, so the "Equivalent command" carries a `# app: schema …` note.
+
+## 13. Change: Increase SOE (sbutil -dup)
+
+* New run type `increase` (`ops/grow_soe.py`), page `/increase`, button on the PDBs page. Command:
+  `sbutil -u <user> -p <pw> -cs //scan:port/service -soe -parallel <sbutil_parallel> -dup <dup>`
+  (`cmdbuild.sbutil_dup_argv`; `-p` masked in every display).
+* Parameters: `schemas` (rule `schema_prefixes`: list of schema prefixes, `''` = SOE), range or `pdbs`,
+  `dup`, `sbutil_parallel`, `parallel` (sliding window of sbutil processes), `keep_going`,
+  `sbutil_path`. Profile fields `sbutil_path`, `sbutil_dup` (2), `sbutil_parallel` (32), `grow_parallel` (1).
+* Items are (PDB, schema) pairs. With one schema the item is the PDB name; with several it is
+  `PDBPP_001:BATCH1_SOE` (tiles show the schema under the number; logs are `PDBPP_001-BATCH1_SOE-*.log`).
+* Per item: login/table check (`check_sql`, 60 s), then sbutil. Pre-flight via SYSDBA as for Load SOE
+  (blocked when a PDB is missing or not open). No markers are written: growth is recorded in the run.
+* Retry: `Operation.retry_params()` hook; for `increase` the unfinished items become `targets`
+  (rule `schema_targets`, `PDB:SCHEMA`), so a retry never grows a schema that already succeeded.
+* Simulation: `tools/stubs/sbutil` (state `soe_dup` per schema); scenario `PDBPP_037: {"grow": "fail"}`.

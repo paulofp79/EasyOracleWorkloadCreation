@@ -10,6 +10,7 @@ const FIELDS: [string, string, string, string, string?, string?][] = [
   ["prefix", "PDB prefix", "prefix", "prefix"],
   ["first", "First", "pdb_number", "workload_first"],
   ["last", "Last", "pdb_number", "workload_last"],
+  ["schema_prefix", "Schema prefix", "schema_prefix", "schema_prefix", undefined, "Empty = SOE; BATCH1 = user BATCH1_SOE"],
   ["scan_host", "SCAN host", "scan_host", "scan_host"],
   ["scan_port", "SCAN port", "scan_port", "scan_port"],
   ["service_suffix", "Service suffix", "service_suffix", "service_suffix", undefined, "e.g. .us.oracle.com"],

@@ -134,6 +134,7 @@ select, input {
 .editor fieldset { border: 1px solid var(--border); border-radius: 8px; margin: 0 0 1rem; padding: .5rem .75rem .75rem; }
 .editor legend { font-weight: 600; padding: 0 .35rem; }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: .6rem .9rem; }
+.field-group { display: flex; flex-direction: column; gap: .4rem; }
 .field { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
 .field label { font-size: .85rem; color: var(--muted); }
 .field-wide { grid-column: span 2; }

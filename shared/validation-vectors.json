@@ -363,5 +363,23 @@
       "svc;drop",
       "'x'"
     ]
+  },
+  "schema_prefix": {
+    "valid": [
+      "",
+      "BATCH1",
+      "batch_2",
+      "B",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    ],
+    "invalid": [
+      "1BATCH",
+      "_B",
+      "BATCH-1",
+      "BATCH 1",
+      "B$",
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZA",
+      "B'X"
+    ]
   }
 }

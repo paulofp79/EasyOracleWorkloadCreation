@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA_FILE = Path(__file__).with_name("schema.sql")
 
 
@@ -35,9 +35,33 @@ class Database:
             raise RuntimeError(f"Database {self.path} has schema {version}, newer than this program "
                                f"({SCHEMA_VERSION}). Upgrade the program.")
         if version < SCHEMA_VERSION:
-            # v1 -> v2 only adds the users table. The script is idempotent (IF NOT EXISTS) and
-            # executescript commits on its own.
-            self.conn.executescript(SCHEMA_FILE.read_text() + f"\nPRAGMA user_version = {SCHEMA_VERSION};\n")
+            # Creates whatever is missing (new database: final shape; v1 -> v2: the users table).
+            # The script is idempotent (IF NOT EXISTS) and executescript commits on its own.
+            self.conn.executescript(SCHEMA_FILE.read_text())
+            self._migrate_v3()
+            self.conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    def _columns(self, table: str) -> set[str]:
+        return {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+
+    def _migrate_v3(self) -> None:
+        """v3: several SOE schemas per PDB. Markers are keyed by (pdb, schema_user); existing ones
+        become schema SOE. last_checks remembers which schema was checked."""
+        if "schema_user" not in self._columns("soe_markers"):
+            self.conn.executescript("""
+                BEGIN;
+                CREATE TABLE soe_markers_v3 (
+                  pdb TEXT NOT NULL, schema_user TEXT NOT NULL DEFAULT 'SOE', con_uid TEXT NOT NULL,
+                  loaded_at TEXT NOT NULL, run_id TEXT, scale TEXT, tablespace TEXT,
+                  PRIMARY KEY (pdb, schema_user));
+                INSERT INTO soe_markers_v3(pdb, schema_user, con_uid, loaded_at, run_id, scale, tablespace)
+                  SELECT pdb, 'SOE', con_uid, loaded_at, run_id, scale, tablespace FROM soe_markers;
+                DROP TABLE soe_markers;
+                ALTER TABLE soe_markers_v3 RENAME TO soe_markers;
+                COMMIT;
+            """)
+        if "schema_user" not in self._columns("last_checks"):
+            self.conn.execute("ALTER TABLE last_checks ADD COLUMN schema_user TEXT")
 
     def tx(self):
         return _Tx(self.conn)
@@ -219,12 +243,15 @@ class Database:
                           + (f" (pid {r['pid']})" if r["pid"] else ""), run_id, r["pdb"]))
 
     # ---- per-PDB state kept across runs ----------------------------------------------------
-    def upsert_last_check(self, pdb: str, status: str, detail: str, instance: str | None, run_id: str) -> None:
+    def upsert_last_check(self, pdb: str, status: str, detail: str, instance: str | None, run_id: str,
+                          schema_user: str = "SOE") -> None:
         self.conn.execute(
-            "INSERT INTO last_checks(pdb, status, detail, instance, checked_at, run_id) VALUES (?,?,?,?,?,?) "
+            "INSERT INTO last_checks(pdb, status, detail, instance, checked_at, run_id, schema_user) "
+            "VALUES (?,?,?,?,?,?,?) "
             "ON CONFLICT(pdb) DO UPDATE SET status = excluded.status, detail = excluded.detail, "
-            "instance = excluded.instance, checked_at = excluded.checked_at, run_id = excluded.run_id",
-            (pdb, status, detail, instance, utcnow(), run_id))
+            "instance = excluded.instance, checked_at = excluded.checked_at, run_id = excluded.run_id, "
+            "schema_user = excluded.schema_user",
+            (pdb, status, detail, instance, utcnow(), run_id, schema_user))
 
     def last_checks(self, prefix: str) -> dict[str, dict[str, Any]]:
         rows = self.conn.execute("SELECT * FROM last_checks WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
@@ -232,20 +259,35 @@ class Database:
         return {r["pdb"]: dict(r) for r in rows}
 
     def set_soe_marker(self, pdb: str, con_uid: str, run_id: str | None, scale: str | None,
-                       tablespace: str | None, loaded_at: str | None = None) -> None:
+                       tablespace: str | None, loaded_at: str | None = None, schema_user: str = "SOE") -> None:
         self.conn.execute(
-            "INSERT INTO soe_markers(pdb, con_uid, loaded_at, run_id, scale, tablespace) VALUES (?,?,?,?,?,?) "
-            "ON CONFLICT(pdb) DO UPDATE SET con_uid = excluded.con_uid, loaded_at = excluded.loaded_at, "
-            "run_id = excluded.run_id, scale = excluded.scale, tablespace = excluded.tablespace",
-            (pdb, con_uid, loaded_at or utcnow(), run_id, scale, tablespace))
+            "INSERT INTO soe_markers(pdb, schema_user, con_uid, loaded_at, run_id, scale, tablespace) "
+            "VALUES (?,?,?,?,?,?,?) "
+            "ON CONFLICT(pdb, schema_user) DO UPDATE SET con_uid = excluded.con_uid, "
+            "loaded_at = excluded.loaded_at, run_id = excluded.run_id, scale = excluded.scale, "
+            "tablespace = excluded.tablespace",
+            (pdb, schema_user, con_uid, loaded_at or utcnow(), run_id, scale, tablespace))
 
     def delete_soe_marker(self, pdb: str) -> None:
+        """All schemas of a dropped PDB."""
         self.conn.execute("DELETE FROM soe_markers WHERE pdb = ?", (pdb,))
 
-    def soe_markers(self, prefix: str) -> dict[str, dict[str, Any]]:
-        rows = self.conn.execute("SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\'",
-                                 (prefix,)).fetchall()
+    def soe_markers(self, prefix: str, schema_user: str = "SOE") -> dict[str, dict[str, Any]]:
+        """Markers of one schema: {pdb: marker}."""
+        rows = self.conn.execute(
+            "SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\' AND schema_user = ?",
+            (prefix, schema_user)).fetchall()
         return {r["pdb"]: dict(r) for r in rows}
+
+    def soe_markers_all(self, prefix: str) -> dict[str, list[dict[str, Any]]]:
+        """Markers of every schema: {pdb: [marker, ...]} ordered by schema."""
+        rows = self.conn.execute(
+            "SELECT * FROM soe_markers WHERE pdb LIKE ? || '\\_%' ESCAPE '\\' ORDER BY pdb, schema_user",
+            (prefix,)).fetchall()
+        out: dict[str, list[dict[str, Any]]] = {}
+        for r in rows:
+            out.setdefault(r["pdb"], []).append(dict(r))
+        return out
 
     # ---- users ----------------------------------------------------------------------------
     def set_user(self, username: str, password_hash: str) -> bool:

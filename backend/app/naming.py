@@ -20,3 +20,13 @@ def connect_string(host: str, port: int, service: str) -> str:
 
 def pdb_connect_string(pdb: str, host: str, port: int, suffix: str = "") -> str:
     return connect_string(host, port, service_name(pdb, suffix))
+
+
+def schema_user(schema_prefix: str = "") -> str:
+    """Swingbench schema user as shown and recorded: SOE, or <PREFIX>_SOE."""
+    return f"{schema_prefix.upper()}_SOE" if schema_prefix else "SOE"
+
+
+def login_user(schema_prefix: str = "") -> str:
+    """User name written into SQL and command lines: 'soe' exactly as the scripts write it, or <PREFIX>_SOE."""
+    return schema_user(schema_prefix) if schema_prefix else "soe"

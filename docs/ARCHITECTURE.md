@@ -151,3 +151,17 @@ audit log records the logged-in user as actor.
 * `/api/audit` and the Audit log page; a secret-leak test drives every operation with unique secrets and
   searches all files, the database and all API responses.
 
+
+## 12. Change: several Swingbench schemas per PDB (schema prefix)
+
+* New parameter `schema_prefix` (Load SOE, Check connections, Run workload; profile default empty).
+  Empty = the scripts' behaviour, byte for byte (`GRANT DBA TO soe`, `-u soe`). `BATCH1` = user
+  `BATCH1_SOE`: `GRANT DBA TO BATCH1_SOE`, `oewizard -u BATCH1_SOE`, `charbench -u BATCH1_SOE`, check
+  connects as `BATCH1_SOE`. Rule: a letter, then letters/digits/`_`, at most 26 characters (user ≤ 30).
+* Tablespace stays a separate parameter. The Load SOE page offers "Own tablespace for this schema",
+  ticked by default when a prefix is set (`<PREFIX>_SOETBS`); unticked, schemas share `SOETBS`. The
+  plan warns when the tablespace already holds another schema this tool loaded in the target PDBs.
+* Database schema v3: `soe_markers` keyed by `(pdb, schema_user)` (old rows become `SOE`);
+  `last_checks.schema_user`. A load skips a PDB only when *that* schema is loaded there. Dropping a
+  PDB removes all its markers. The inventory returns `soe_schemas` per PDB; the PDBs page lists them.
+* The scripts only know SOE, so the "Equivalent command" carries a `# app: schema …` note.

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..cmdbuild import charbench_argv, display
+from ..naming import login_user, schema_user
 from ..db import utcnow
 from ..engine.runner import ToolNotFound
 from ..logscan import ERR_REGEX, FIRST_MAX, scan_file
@@ -51,8 +52,9 @@ class Workload(Operation):
               "skip_unreachable": "boolean", "users": "positive_int", "runtime": "runtime",
               "charbench_path": "abs_path", "config_xml": "abs_path", "disable_txns": "disable_txns",
               "start_delay": "start_delay"}
-    OPTIONAL = {"pdbs": "pdb_names"}
+    OPTIONAL = {"pdbs": "pdb_names", "schema_prefix": "schema_prefix"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "workload_first", "last": "workload_last",
+                        "schema_prefix": "schema_prefix",
                         "scan_host": "scan_host", "scan_port": "scan_port", "service_suffix": "service_suffix",
                         "check_timeout": "check_timeout", "check_parallel": "check_parallel",
                         "skip_unreachable": "skip_unreachable", "users": "users", "runtime": "runtime",
@@ -68,7 +70,8 @@ class Workload(Operation):
     def argv(self, run_dir: Path, pdb: str, password: str) -> list[str]:
         p = self.params
         return charbench_argv(p["charbench_path"], connect_for(p, pdb), password, p["config_xml"], p["users"],
-                              p["disable_txns"], p["runtime"], str(run_dir / f"{pdb}-results.xml"))
+                              p["disable_txns"], p["runtime"], str(run_dir / f"{pdb}-results.xml"),
+                              login_user(p.get("schema_prefix", "")))
 
     def tool_problems(self) -> list[str]:
         p = self.params
@@ -106,6 +109,8 @@ class Workload(Operation):
         text = f"SOE_PASSWORD='{MASK}' " + " ".join(shlex.quote(c) for c in cmd)
         if p.get("pdbs"):
             text += f"   # app: only the {len(p['pdbs'])} selected PDBs"
+        if p.get("schema_prefix"):
+            text += f"   # app: schema {schema_user(p['schema_prefix'])} (the script always uses SOE)"
         return text
 
     async def plan(self) -> dict[str, Any]:
@@ -133,6 +138,7 @@ class Workload(Operation):
             "blocked": bool(problems), "warnings": warnings, "load": est,
             "runtime_s": run_s, "launch_s": round(self.params["start_delay"] * max(0, est["processes"] - 1), 1),
             "example_connect": connect_for(self.params, pdbs[0]),
+            "schema_user": schema_user(self.params.get("schema_prefix", "")),
             "command_preview": display(self.argv(Path(self.params["log_dir"]) / "run-<id>", pdbs[0], MASK)),
             "equivalent_command": self.equivalent_command(),
         }

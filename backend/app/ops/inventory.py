@@ -68,14 +68,17 @@ async def query_preflight(settings: Settings, prefix: str, conn: SysdbaConn,
 async def inventory(settings: Settings, db: Database, prefix: str, conn: SysdbaConn) -> dict[str, Any]:
     live = await query_inventory(settings, prefix, conn)
     checks = db.last_checks(prefix)
-    markers = db.soe_markers(prefix)
+    markers = db.soe_markers_all(prefix)
     instances: dict[int, str] = {}
     pdbs = []
     for name in sorted(live):
         row = live[name]
         for inst in row.instances:
             instances[inst["inst_id"]] = inst["instance"]
-        marker = markers.get(name)
+        pdb_markers = markers.get(name, [])
+        valid = [m for m in pdb_markers if m["con_uid"] == row.con_uid]
+        stale = [m for m in pdb_markers if m["con_uid"] != row.con_uid]
+        marker = next((m for m in valid if m["schema_user"] == "SOE"), None)
         pdbs.append({
             "name": name,
             "number": int(name[-3:]),
@@ -85,8 +88,11 @@ async def inventory(settings: Settings, db: Database, prefix: str, conn: SysdbaC
             "restricted": row.restricted,
             "instances": row.instances,
             # A marker for an older incarnation (different con_uid) does not count (gotcha 7).
-            "soe_loaded": marker if marker and marker["con_uid"] == row.con_uid else None,
-            "soe_marker_stale": bool(marker and marker["con_uid"] != row.con_uid),
+            "soe_loaded": marker,
+            "soe_schemas": [{"schema_user": m["schema_user"], "loaded_at": m["loaded_at"],
+                             "tablespace": m.get("tablespace"), "run_id": m.get("run_id")} for m in valid],
+            "soe_marker_stale": bool(stale),
+            "soe_stale_schemas": [m["schema_user"] for m in stale],
             "last_check": checks.get(name),
         })
     return {"prefix": prefix, "fetched_at": utcnow(),

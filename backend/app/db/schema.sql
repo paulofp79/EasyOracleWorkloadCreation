@@ -47,21 +47,24 @@ CREATE TABLE IF NOT EXISTS run_items (
 );
 
 CREATE TABLE IF NOT EXISTS soe_markers (
-  pdb        TEXT PRIMARY KEY,
-  con_uid    TEXT NOT NULL,
-  loaded_at  TEXT NOT NULL,
-  run_id     TEXT,
-  scale      TEXT,
-  tablespace TEXT
+  pdb         TEXT NOT NULL,
+  schema_user TEXT NOT NULL DEFAULT 'SOE',
+  con_uid     TEXT NOT NULL,
+  loaded_at   TEXT NOT NULL,
+  run_id      TEXT,
+  scale       TEXT,
+  tablespace  TEXT,
+  PRIMARY KEY (pdb, schema_user)
 );
 
 CREATE TABLE IF NOT EXISTS last_checks (
-  pdb        TEXT PRIMARY KEY,
-  status     TEXT NOT NULL,
-  detail     TEXT,
-  instance   TEXT,
-  checked_at TEXT NOT NULL,
-  run_id     TEXT
+  pdb         TEXT PRIMARY KEY,
+  status      TEXT NOT NULL,
+  detail      TEXT,
+  instance    TEXT,
+  checked_at  TEXT NOT NULL,
+  run_id      TEXT,
+  schema_user TEXT
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (

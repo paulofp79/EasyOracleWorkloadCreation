@@ -63,14 +63,14 @@ EXIT
 """
 
 
-def check_sql(soe_password: str, connect: str) -> str:
+def check_sql(soe_password: str, connect: str, user: str = "soe") -> str:
     """run_charbench_all_pdbs.sh check_pdb(): SOE login, container and core-table check."""
     tables = ",".join(f"'{t}'" for t in SOE_CORE_TABLES)
     return f"""WHENEVER SQLERROR EXIT FAILURE
 SET DEFINE OFF
 SET PAGESIZE 0 FEEDBACK OFF HEADING OFF VERIFY OFF ECHO OFF
 SET LINESIZE 300 TRIMSPOOL ON
-CONNECT soe/"{soe_password}"@{connect}
+CONNECT {user}/"{soe_password}"@{connect}
 SELECT 'SOE_CHECK_OK|' || SYS_CONTEXT('USERENV','CON_NAME') || '|' || SYS_CONTEXT('USERENV','INSTANCE_NAME') || '|' || (SELECT COUNT(*) FROM user_tables WHERE table_name IN ({tables})) FROM dual;
 EXIT
 """
@@ -141,13 +141,13 @@ def drop_pdb_sql(pdb: str, rac: bool) -> str:
     return "WHENEVER OSERROR EXIT FAILURE\nWHENEVER SQLERROR EXIT SQL.SQLCODE\n" + drop_pdb_block(pdb, rac) + "EXIT\n"
 
 
-def soe_setup_sql(pdb: str, soe_password: str) -> str:
-    """create_swingbench.sh step 1: create the SOE user if missing, or reset its password."""
+def soe_setup_sql(pdb: str, soe_password: str, user: str = "soe") -> str:
+    """create_swingbench.sh step 1: create the schema user if missing, or reset its password."""
     return f"""WHENEVER OSERROR EXIT FAILURE
 WHENEVER SQLERROR EXIT SQL.SQLCODE
 SET DEFINE OFF
 SET ECHO OFF
 ALTER SESSION SET CONTAINER = {pdb};
-GRANT DBA TO soe IDENTIFIED BY "{soe_password}";
+GRANT DBA TO {user} IDENTIFIED BY "{soe_password}";
 EXIT SUCCESS
 """

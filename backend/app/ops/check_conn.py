@@ -8,7 +8,7 @@ from typing import Any
 
 from ..db import utcnow
 from ..engine.runner import ToolNotFound
-from ..naming import pdb_connect_string
+from ..naming import login_user, pdb_connect_string, schema_user
 from ..parsing import parse_check
 from ..sqlbuild import check_sql
 from .base import Operation, PlanError, SysPasswordMissing
@@ -45,7 +45,8 @@ async def run_checks(ctx, pdbs: list[str], *, ok_state: str = "ok", fail_state: 
                 return
             ctx.set_item(pdb, state="checking", started_at=utcnow())
             r = await ctx.runner.run(
-                NOLOG, stdin_text=check_sql(password, connect_for(p, pdb)), log_path=conn_dir / f"{pdb}.log",
+                NOLOG, stdin_text=check_sql(password, connect_for(p, pdb), login_user(p.get("schema_prefix", ""))),
+                log_path=conn_dir / f"{pdb}.log",
                 timeout=p["check_timeout"], timeout_grace=TIMEOUT_GRACE,
                 on_start=lambda res: ctx.set_item(pdb, pid=res.pid, pgid=res.pgid, proc_starttime=res.starttime))
             if r.cancelled:
@@ -57,7 +58,8 @@ async def run_checks(ctx, pdbs: list[str], *, ok_state: str = "ok", fail_state: 
             ctx.set_item(pdb, state=ok_state if res.status == "OK" else fail_state, check_status=res.status,
                          check_detail=res.detail, instance=res.instance, exit_code=r.exit_code,
                          ended_at=utcnow(), detail=None if res.status == "OK" else res.detail)
-            ctx.db.upsert_last_check(pdb, res.status, res.detail, res.instance, ctx.run_id)
+            ctx.db.upsert_last_check(pdb, res.status, res.detail, res.instance, ctx.run_id,
+                                     schema_user(p.get("schema_prefix", "")))
 
     await asyncio.gather(*(one(pdb) for pdb in pdbs))
 
@@ -82,8 +84,9 @@ def check_summary(pdbs: list[str], results: dict[str, Any]) -> dict[str, Any]:
 class CheckConnections(Operation):
     type = "check"
     PARAMS = {**CONNECTION_PARAMS, **CHECK_PARAMS, "first": "pdb_number", "last": "pdb_number"}
-    OPTIONAL = {"pdbs": "pdb_names"}
+    OPTIONAL = {"pdbs": "pdb_names", "schema_prefix": "schema_prefix"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "workload_first", "last": "workload_last",
+                        "schema_prefix": "schema_prefix",
                         "scan_host": "scan_host", "scan_port": "scan_port", "service_suffix": "service_suffix",
                         "check_timeout": "check_timeout", "check_parallel": "check_parallel", "log_dir": "log_dir",
                         "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
@@ -105,6 +108,8 @@ class CheckConnections(Operation):
         text = "SOE_PASSWORD='********' " + " ".join(shlex.quote(c) for c in cmd)
         if p.get("pdbs"):
             text += f"   # app: only the {len(p['pdbs'])} selected PDBs"
+        if p.get("schema_prefix"):
+            text += f"   # app: schema {schema_user(p['schema_prefix'])} (the script always uses SOE)"
         return text
 
     async def plan(self) -> dict[str, Any]:
@@ -126,6 +131,7 @@ class CheckConnections(Operation):
                         ([f"{len(not_open)} PDB(s) are not open READ WRITE and will fail the check"]
                          if not_open else []),
             "example_connect": connect_for(self.params, pdbs[0]),
+            "schema_user": schema_user(self.params.get("schema_prefix", "")),
             "equivalent_command": self.equivalent_command(),
         }
 

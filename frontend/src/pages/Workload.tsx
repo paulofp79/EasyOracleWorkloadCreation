@@ -11,6 +11,7 @@ const FIELDS: [string, string, string, string, string?, string?][] = [
   ["prefix", "PDB prefix", "prefix", "prefix"],
   ["first", "First", "pdb_number", "workload_first"],
   ["last", "Last", "pdb_number", "workload_last"],
+  ["schema_prefix", "Schema prefix", "schema_prefix", "schema_prefix", undefined, "Empty = SOE; BATCH1 = user BATCH1_SOE"],
   ["users", "Users per PDB (-uc)", "positive_int", "users"],
   ["runtime", "Runtime (-rt)", "runtime", "runtime", undefined, "HH:MM"],
   ["disable_txns", "Disabled transactions (-di)", "disable_txns", "disable_txns", undefined, "Empty = none"],

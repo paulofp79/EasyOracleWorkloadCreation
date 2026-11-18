@@ -7,9 +7,9 @@ from .redact import mask_argv
 
 
 def oewizard_argv(oewizard: str, connect: str, soe_password: str, scale: str, threads: int,
-                  sys_password: str, tablespace: str) -> list[str]:
+                  sys_password: str, tablespace: str, user: str = "soe") -> list[str]:
     """create_swingbench.sh step 2. oewizard only takes passwords as arguments (visible in ps)."""
-    return [oewizard, "-cl", "-create", "-cs", connect, "-u", "soe", "-p", soe_password,
+    return [oewizard, "-cl", "-create", "-cs", connect, "-u", user, "-p", soe_password,
             "-scale", scale, "-tc", str(threads), "-dba", "sys as sysdba", "-dbap", sys_password,
             "-ts", tablespace, "-async_off", "-v"]
 
@@ -20,9 +20,9 @@ def display(argv: list[str]) -> str:
 
 
 def charbench_argv(charbench: str, connect: str, soe_password: str, config: str, users: int,
-                   disable_txns: str, runtime: str, results: str) -> list[str]:
+                   disable_txns: str, runtime: str, results: str, user: str = "soe") -> list[str]:
     """run_charbench_all_pdbs.sh workload command; -di is omitted when nothing is disabled."""
-    argv = [charbench, "-cs", connect, "-u", "soe", "-p", soe_password, "-c", config,
+    argv = [charbench, "-cs", connect, "-u", user, "-p", soe_password, "-c", config,
             "-v", "users,tpm,tps,errs,vresp", "-intermin", "0", "-intermax", "0", "-min", "0", "-max", "0",
             "-uc", str(users)]
     if disable_txns:

@@ -27,7 +27,7 @@ function matches(p: InventoryPdb, f: StateFilter): boolean {
   }
 }
 
-const COLS = "2rem 7.5rem 7rem minmax(13.5rem, 1.2fr) 6rem minmax(14rem, 2.5fr) 10.5rem";
+const COLS = "2rem 7.5rem 7rem minmax(13.5rem, 1.2fr) minmax(9rem, 1fr) minmax(14rem, 2.3fr) 10.5rem";
 const ROW_H = 34;
 
 export default function Pdbs() {
@@ -124,7 +124,7 @@ export default function Pdbs() {
           <span role="columnheader">PDB</span>
           <span role="columnheader">CON_UID</span>
           <span role="columnheader">Open mode / instance</span>
-          <span role="columnheader">SOE</span>
+          <span role="columnheader">Schemas</span>
           <span role="columnheader">Last connection check</span>
           <span role="columnheader">Checked</span>
         </div>
@@ -150,14 +150,18 @@ export default function Pdbs() {
                       </span>
                     ))}
                   </span>
-                  <span role="cell" className="small">
-                    {p.soe_loaded ? <span className="text-ok" title={`loaded ${fmtTime(p.soe_loaded.loaded_at)}`}>✓ loaded</span>
-                      : p.soe_marker_stale ? <span className="text-warn" title="Loaded into an earlier PDB with the same name">! stale</span>
+                  <span role="cell" className="small ellipsis">
+                    {p.soe_schemas.length ? (
+                      <span className="text-ok" title={p.soe_schemas.map((s) =>
+                        `${s.schema_user}: loaded ${fmtTime(s.loaded_at)}${s.tablespace ? ` in ${s.tablespace}` : ""}`).join("\n")}>
+                        ✓ {p.soe_schemas.map((s) => s.schema_user).sort((a, b) => (a === "SOE" ? -1 : b === "SOE" ? 1 : a.localeCompare(b))).join(", ")}
+                      </span>
+                    ) : p.soe_marker_stale ? <span className="text-warn" title={`Loaded into an earlier PDB with the same name: ${p.soe_stale_schemas.join(", ")}`}>! stale</span>
                       : <span className="muted">—</span>}
                   </span>
                   <span role="cell" className="small mono ellipsis" title={lc?.detail}>
                     {lc ? (lc.status === "OK"
-                      ? <span className="text-ok">✓ OK {lc.instance}</span>
+                      ? <span className="text-ok">✓ OK {lc.instance}{lc.schema_user && lc.schema_user !== "SOE" ? ` · ${lc.schema_user}` : ""}</span>
                       : <span className="text-fail">✕ {lc.detail}</span>) : <span className="muted">never</span>}
                   </span>
                   <span role="cell" className="small muted">

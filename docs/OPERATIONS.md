@@ -84,6 +84,13 @@ sudo systemctl restart pdb-orchestrator
 Offline: unpack the new bundle over the directory and run `scripts/install.sh --offline`. The database
 schema is migrated on start; a newer database refuses to open with an older program.
 
+## Several SOE schemas in one PDB
+
+Load SOE → **Schema prefix** `BATCH1` creates and loads user `BATCH1_SOE` next to `SOE` (empty = `SOE`).
+"Own tablespace for this schema" (default on) uses `BATCH1_SOETBS`; untick it to share `SOETBS`. Use the
+same prefix on Check connections and Run workload to drive that schema. The PDBs page lists the schemas
+loaded in each PDB.
+
 ## Troubleshooting
 
 | Symptom | Meaning / fix |

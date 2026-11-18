@@ -237,6 +237,18 @@ def cdb_service(v: Any) -> str:
     return s
 
 
+RE_SCHEMA_PREFIX = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,25}")
+
+
+def schema_prefix(v: Any) -> str:
+    """'' for the plain SOE schema, else a prefix giving <PREFIX>_SOE (at most 30 characters)."""
+    s = "" if v is None else _text(v)
+    if s and not RE_SCHEMA_PREFIX.fullmatch(s):
+        raise RuleError("must start with a letter and use letters, digits and underscore (max 26), "
+                        "or be empty for SOE")
+    return s.upper()
+
+
 def confirm_delete(v: Any) -> str:
     if v != "DELETE":
         raise RuleError("type DELETE to confirm")
@@ -249,6 +261,7 @@ RULES: dict[str, Callable[[Any], Any]] = {
     "confirm_token": confirm_token,
     "confirm_delete": confirm_delete,
     "cdb_connect": cdb_connect,
+    "schema_prefix": schema_prefix,
     "cdb_service": cdb_service,
     "prefix": prefix, "pdb_number": pdb_number, "positive_int": positive_int,
     "scan_host": scan_host, "scan_port": scan_port, "service_suffix": service_suffix,
@@ -260,6 +273,7 @@ RULES: dict[str, Callable[[Any], Any]] = {
 # (field name) -> (rule name, default). Non-secret parameters stored in profiles.
 PROFILE_FIELDS: dict[str, tuple[str, Any]] = {
     "prefix": ("prefix", "PDBPP"),
+    "schema_prefix": ("schema_prefix", ""),
     "create_first": ("pdb_number", 1),
     "create_last": ("pdb_number", 250),
     "load_first": ("pdb_number", 222),

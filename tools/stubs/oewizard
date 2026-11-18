@@ -43,9 +43,13 @@ def main():
             sim.out("java.sql.SQLException: ORA-01652: unable to extend temp segment by 128 in tablespace TEMP",
                     "Schema creation failed")
             return 1
+    user = (sim.arg_value(argv, "-u") or "soe").upper()
     with sim.locked_state(write=True) as st:
         if pdb in st["pdbs"]:
-            st["pdbs"][pdb]["soe_loaded"] = True
+            p = st["pdbs"][pdb]
+            loaded = sim.schemas(p)
+            p.pop("soe_loaded", None)
+            p["soe_schemas"] = loaded + ([user] if user not in loaded else [])
     sim.out("Schema Created", "Completed Run.")
     return 0
 

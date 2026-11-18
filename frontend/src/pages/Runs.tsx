@@ -13,7 +13,8 @@ function describe(r: Run): string {
   const extra = r.type === "workload" ? `${p.users} users · ${p.runtime}`
     : r.type === "load" ? `scale ${p.scale} · ${p.parallel} parallel`
     : r.type === "create" ? `TDE ${p.use_wallet ? "on" : "off"}` : "";
-  return [scope, extra].filter(Boolean).join(" · ");
+  const schema = p.schema_prefix ? `${String(p.schema_prefix).toUpperCase()}_SOE` : "";
+  return [scope, schema, extra].filter(Boolean).join(" · ");
 }
 
 function useDebounced<T>(value: T, ms = 300): T {

@@ -32,7 +32,7 @@ PATTERNS = [
     ("container", re.compile(r"^\s*ALTER\s+SESSION\s+SET\s+CONTAINER\s*=\s*(\w+)", re.I | re.M)),
     ("register", re.compile(r"^\s*ALTER\s+SYSTEM\s+REGISTER", re.I | re.M)),
     ("tde", re.compile(r"ADMINISTER\s+KEY\s+MANAGEMENT", re.I)),
-    ("grant", re.compile(r"GRANT\s+DBA\s+TO\s+soe\b", re.I)),
+    ("grant", re.compile(r"GRANT\s+DBA\s+TO\s+(\w+)", re.I)),
     ("env", re.compile(r"'ENV_CHECK\|'")),
     ("token", re.compile(r"'SYSDBA_'\s*\|\|\s*'SESSION_OK'")),
     ("inventory_detail", re.compile(r"'PDB\|'.*?LIKE\s+'([A-Za-z0-9_]+)%'", re.I | re.S)),
@@ -103,7 +103,7 @@ def handle(kind, m, ctx):
             if pdb in st["pdbs"]:
                 fail(65012, "Pluggable database %s already exists." % pdb)
             st["pdbs"][pdb] = {"con_uid": sim.new_con_uid(), "open": ["MOUNTED"] * n_instances(),
-                               "soe_loaded": False}
+                               "soe_schemas": []}
     elif kind == "open":
         sim.delay("open_pdb")
         with sim.locked_state(write=True) as st:
@@ -218,7 +218,7 @@ def run_nolog(sql):
     instances = sim.SCENARIO["cdb"].get("instances", ["inst1"])
     inst = instances[sum(map(ord, pdb)) % len(instances)]
     con = "CDB$ROOT" if scen == "wrong_container" else pdb
-    tables = 4 if (p.get("soe_loaded") and scen != "no_schema") else 0
+    tables = 4 if (m.group(1).upper() in sim.schemas(p) and scen != "no_schema") else 0
     sim.out("SOE_CHECK_OK|%s|%s|%d" % (con, inst, tables))
     return 0
 

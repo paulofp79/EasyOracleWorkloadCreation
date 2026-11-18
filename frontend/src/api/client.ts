@@ -121,7 +121,10 @@ export interface InventoryPdb {
   instances: { inst_id: number; instance: string; open_mode: string; restricted: boolean }[];
   soe_loaded: { loaded_at: string; run_id: string; scale: string } | null;
   soe_marker_stale: boolean;
-  last_check: { status: string; detail: string; instance: string | null; checked_at: string; run_id: string } | null;
+  soe_schemas: { schema_user: string; loaded_at: string; tablespace: string | null; run_id: string | null }[];
+  soe_stale_schemas: string[];
+  last_check: { status: string; detail: string; instance: string | null; checked_at: string; run_id: string;
+                schema_user?: string | null } | null;
 }
 
 export interface Inventory {
@@ -150,6 +153,8 @@ export interface Plan {
   launch_s?: number;
   warnings: string[];
   example_connect?: string;
+  schema_user?: string;
+  tablespace?: string;
   equivalent_command: string;
 }
 

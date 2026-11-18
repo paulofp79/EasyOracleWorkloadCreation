@@ -17,7 +17,7 @@ from typing import Any
 from ..cmdbuild import display, oewizard_argv
 from ..db import utcnow
 from ..engine.runner import ToolNotFound
-from ..naming import pdb_connect_string
+from ..naming import login_user, pdb_connect_string, schema_user
 from ..parsing import first_error
 from ..redact import MASK
 from ..sqlbuild import soe_setup_sql
@@ -49,13 +49,24 @@ class LoadSoe(Operation):
               "threads": "positive_int", "tablespace": "tablespace", "parallel": "positive_int",
               "keep_going": "boolean", "oewizard_path": "abs_path", "log_dir": "abs_path",
               "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
-    OPTIONAL = {"pdbs": "pdb_names", "force": "boolean"}
+    OPTIONAL = {"pdbs": "pdb_names", "force": "boolean", "schema_prefix": "schema_prefix"}
     PROFILE_DEFAULTS = {"prefix": "prefix", "first": "load_first", "last": "load_last", "scan_host": "scan_host",
+                        "schema_prefix": "schema_prefix",
                         "scan_port": "scan_port", "service_suffix": "service_suffix", "scale": "scale",
                         "threads": "threads", "tablespace": "tablespace", "parallel": "parallel",
                         "keep_going": "keep_going", "oewizard_path": "oewizard_path", "log_dir": "log_dir",
                         "cdb_connect": "cdb_connect", "cdb_service": "cdb_service"}
     SECRETS = {"soe_password": "quoted_password", "sys_password": "password"}
+
+    @property
+    def schema(self) -> str:
+        """Schema user as recorded and shown: SOE or <PREFIX>_SOE."""
+        return schema_user(self.params.get("schema_prefix", ""))
+
+    @property
+    def user(self) -> str:
+        """User name in SQL and on the oewizard command line ('soe' exactly as the script, or <PREFIX>_SOE)."""
+        return login_user(self.params.get("schema_prefix", ""))
 
     @property
     def force(self) -> bool:
@@ -68,7 +79,7 @@ class LoadSoe(Operation):
     def argv(self, pdb: str, soe_pw: str, sys_pw: str) -> list[str]:
         p = self.params
         return oewizard_argv(p["oewizard_path"], self.connect(pdb), soe_pw, p["scale"], p["threads"], sys_pw,
-                             p["tablespace"])
+                             p["tablespace"], self.user)
 
     def equivalent_command(self) -> str:
         p = self.params
@@ -85,11 +96,13 @@ class LoadSoe(Operation):
         text = f"SOE_PASSWORD='{MASK}' DBA_PASSWORD='{MASK}' " + " ".join(shlex.quote(c) for c in cmd)
         if p.get("pdbs"):
             text += f"   # app: only the {len(p['pdbs'])} selected PDBs"
+        if p.get("schema_prefix"):
+            text += f"   # app: schema {self.schema} (the script always loads SOE)"
         return text
 
     def classify(self, live: dict[str, tuple[str, int]]) -> dict[str, Any]:
         """Same decision as the script's pre-flight loop."""
-        markers = self.db.soe_markers(self.params["prefix"])
+        markers = self.db.soe_markers(self.params["prefix"], self.schema)
         missing, not_open, done, targets = [], [], [], []
         for pdb in self.targets():
             if pdb not in live:
@@ -103,6 +116,22 @@ class LoadSoe(Operation):
         return {"missing": missing, "not_open": not_open, "already_loaded": done, "targets": targets,
                 "markers": markers}
 
+    def shared_tablespace(self, targets: list[str]) -> str | None:
+        """Other schemas this tool loaded into the same tablespace of the target PDBs (informational)."""
+        ts = self.params["tablespace"].upper()
+        others: dict[str, int] = {}
+        for pdb, markers in self.db.soe_markers_all(self.params["prefix"]).items():
+            if pdb not in targets:
+                continue
+            for m in markers:
+                if m["schema_user"] != self.schema and (m.get("tablespace") or "").upper() == ts:
+                    others[m["schema_user"]] = others.get(m["schema_user"], 0) + 1
+        if not others:
+            return None
+        who = ", ".join(f"{k} in {n} PDB(s)" for k, n in sorted(others.items()))
+        return (f"Tablespace {ts} already holds {who}; {self.schema} will share it. Use its own tablespace "
+                f"(e.g. {self.params.get('schema_prefix') or 'SOE'}_SOETBS) to keep the schemas apart.")
+
     async def plan(self) -> dict[str, Any]:
         try:
             live = await query_preflight(self.settings, self.params["prefix"], self.sysdba())
@@ -115,6 +144,9 @@ class LoadSoe(Operation):
         if c["not_open"]:
             warnings.append(f"PDBs not open READ WRITE ({len(c['not_open'])}): {short_list(c['not_open'])}")
         blocked = bool(c["missing"] or c["not_open"])
+        shared = self.shared_tablespace(c["targets"])
+        if shared:
+            warnings.append(shared)
         if blocked:
             warnings.append("Fix the PDBs above (or adjust the range) — nothing would be loaded.")
         elif not c["targets"]:
@@ -124,6 +156,7 @@ class LoadSoe(Operation):
             "type": self.type, "pdbs": self.targets(), "count": len(self.targets()),
             "missing": c["missing"], "not_open": c["not_open"], "blocked": blocked,
             "already_loaded": c["already_loaded"], "to_load": c["targets"],
+            "schema_user": self.schema, "tablespace": self.params["tablespace"],
             "warnings": warnings,
             "command_preview": display(self.argv(first, MASK, MASK)),
             "equivalent_command": self.equivalent_command(),
@@ -175,9 +208,9 @@ class LoadSoe(Operation):
                 on_start = lambda res: ctx.set_item(pdb, pid=res.pid, pgid=res.pgid,  # noqa: E731
                                                     proc_starttime=res.starttime)
                 ctx.set_item(pdb, state="running", started_at=started, con_uid=live[pdb][0],
-                             detail="step 1/2: GRANT DBA TO soe")
+                             detail=f"step 1/2: GRANT DBA TO {self.user}")
                 conn = self.sysdba()
-                r = await ctx.runner.run(conn.argv(), stdin_text=conn.stdin(soe_setup_sql(pdb, soe_pw)),
+                r = await ctx.runner.run(conn.argv(), stdin_text=conn.stdin(soe_setup_sql(pdb, soe_pw, self.user)),
                                          log_path=ctx.run_dir / f"{pdb}-soe-setup.log", on_start=on_start)
                 if r.cancelled:
                     ctx.set_item(pdb, state="cancelled", ended_at=utcnow(), detail="stopped during SOE setup")
@@ -203,9 +236,10 @@ class LoadSoe(Operation):
                                  detail=f"Swingbench failed: {err}")
                     ctx.log(f"Swingbench failed for {pdb}: {err}")
                     return
-                ctx.db.set_soe_marker(pdb, live[pdb][0], ctx.run_id, p["scale"], p["tablespace"])
+                ctx.db.set_soe_marker(pdb, live[pdb][0], ctx.run_id, p["scale"], p["tablespace"],
+                                      schema_user=self.schema)
                 ctx.set_item(pdb, state="ok", ended_at=utcnow(), exit_code=0,
-                             detail=f"loaded (scale {p['scale']}, tablespace {p['tablespace']})")
+                             detail=f"{self.schema} loaded (scale {p['scale']}, tablespace {p['tablespace']})")
                 ctx.log(f"finished {pdb}")
             finally:
                 sem.release()

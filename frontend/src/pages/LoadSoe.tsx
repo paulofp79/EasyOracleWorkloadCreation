@@ -11,6 +11,7 @@ const FIELDS: [string, string, string, string, string?, string?][] = [
   ["prefix", "PDB prefix", "prefix", "prefix"],
   ["first", "First", "pdb_number", "load_first"],
   ["last", "Last", "pdb_number", "load_last"],
+  ["schema_prefix", "Schema prefix", "schema_prefix", "schema_prefix"],
   ["parallel", "Parallel loads", "positive_int", "parallel", undefined,
     "PDBs loading at the same time (1 = one after another); a new one starts as soon as one finishes"],
   ["scan_host", "SCAN host", "scan_host", "scan_host"],
@@ -47,6 +48,8 @@ export default function LoadSoe() {
   const [formError, setFormError] = useState("");
   const [importDir, setImportDir] = useState("");
   const [importResult, setImportResult] = useState("");
+  const [ownTbs, setOwnTbs] = useState(true);
+  const baseTbs = String(profile?.params.tablespace ?? "SOETBS");
 
   useEffect(() => {
     if (profile && !values) {
@@ -83,6 +86,20 @@ export default function LoadSoe() {
 
   if (!values) return <h1>Load SOE</h1>;
   const set = (k: string, v: string) => { setValues({ ...values, [k]: v }); reset(); setServerErrors(({ [k]: _x, ...r }) => r); };
+  const prefixUp = values.schema_prefix.trim().toUpperCase();
+  const schema = prefixUp ? `${prefixUp}_SOE` : "SOE";
+  const ownName = `${prefixUp}_SOETBS`;
+  const setPrefix = (v: string) => {
+    const up = v.trim().toUpperCase();
+    // with "own tablespace" ticked the tablespace follows the prefix; empty prefix = the profile's (SOETBS)
+    const tbs = up && ownTbs ? `${up}_SOETBS` : !up || values.tablespace === ownName ? baseTbs : values.tablespace;
+    setValues({ ...values, schema_prefix: v, tablespace: tbs }); reset();
+    setServerErrors(({ schema_prefix: _a, tablespace: _b, ...r }) => r);
+  };
+  const toggleOwn = (on: boolean) => {
+    setOwnTbs(on);
+    setValues({ ...values, tablespace: on ? ownName : baseTbs }); reset();
+  };
   const toLoad = plan?.to_load ?? [];
   const already = plan?.already_loaded ?? [];
   const blockers: string[] = [];
@@ -98,7 +115,7 @@ export default function LoadSoe() {
     <>
       <h1>Load SOE schema</h1>
       <p className="muted">
-        Per PDB: <span className="mono">GRANT DBA TO soe</span> through <span className="mono">/ as sysdba</span>, then
+        Per PDB: <span className="mono">GRANT DBA TO {prefixUp ? schema : "soe"}</span> through <span className="mono">/ as sysdba</span>, then
         <span className="mono"> oewizard -cl -create</span>. PDBs this tool already loaded (same CON_UID) are skipped.
       </p>
       <form className="card editor" onSubmit={(e) => e.preventDefault()}>
@@ -112,6 +129,19 @@ export default function LoadSoe() {
           <legend>PDBs, connection and Swingbench</legend>
           <div className="fields">
             {FIELDS.map(([f, label, , , unit, hint]) => (pdbs && (f === "first" || f === "last")) ? null : (
+              f === "schema_prefix" ? (
+                <div key={f} className="field-group">
+                  <FormField name={f} label={label} value={values[f]} error={errors[f]}
+                             hint={`Schema user: ${schema}${prefixUp ? "" : " (empty = the scripts' SOE)"}`}
+                             onChange={setPrefix} />
+                  {prefixUp && (
+                    <div className="field field-check">
+                      <label><input type="checkbox" checked={ownTbs} onChange={(e) => toggleOwn(e.target.checked)} /> Own tablespace for this schema</label>
+                      <small className="hint">{ownTbs ? `${values.tablespace} (created by oewizard)` : `Shares ${values.tablespace} with other schemas`}</small>
+                    </div>
+                  )}
+                </div>
+              ) :
               <FormField key={f} name={f} label={label} value={values[f]} error={errors[f]} unit={unit} hint={hint}
                          wide={WIDE.has(f)} onChange={(v) => set(f, v)} />
             ))}
@@ -128,7 +158,7 @@ export default function LoadSoe() {
         <fieldset>
           <legend>Credentials</legend>
           <div className="fields">
-            <FormField name="soe_password" label="SOE password" type="password" value={soePw} error={errors.soe_password}
+            <FormField name="soe_password" label={`${schema} password`} type="password" value={soePw} error={errors.soe_password}
                        autoComplete="new-password" onChange={(v) => { setSoePw(v); setServerErrors(({ soe_password: _x, ...r }) => r); }} />
             <FormField name="sys_password" label="SYS password (oewizard -dbap)" type="password" value={sysPw}
                        error={errors.sys_password} autoComplete="new-password"
@@ -147,6 +177,8 @@ export default function LoadSoe() {
             {plan.warnings.map((w) => <p key={w} className={plan.blocked ? "text-fail" : "text-warn"}>! {w}</p>)}
             {!plan.blocked && (
               <>
+                <p>Schema <strong className="mono">{plan.schema_user ?? schema}</strong> in tablespace{" "}
+                  <strong className="mono">{plan.tablespace ?? values.tablespace}</strong>.</p>
                 <p><strong>{toLoad.length}</strong> PDB(s) to load, up to <strong>{values.parallel}</strong> at a time;{" "}
                   <strong>{already.length}</strong> already loaded and skipped.</p>
                 {toLoad.length > 0 && (() => {

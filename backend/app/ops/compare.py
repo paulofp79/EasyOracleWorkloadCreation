@@ -11,6 +11,7 @@ from typing import Any
 
 PARAM_KEYS: list[tuple[str, str]] = [
     ("prefix", "Prefix"), ("first", "First"), ("last", "Last"), ("pdbs", "Selected PDBs"),
+    ("schema_prefix", "Schema prefix"),
     ("users", "Users per PDB"), ("runtime", "Runtime"), ("start_delay", "Start delay (s)"),
     ("disable_txns", "Disabled transactions"), ("config_xml", "Config XML"), ("charbench_path", "charbench"),
     ("skip_unreachable", "Skip unreachable"), ("check_timeout", "Check timeout (s)"),

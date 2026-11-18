@@ -76,7 +76,7 @@ def initial_state():
             pdbs[name] = {
                 "con_uid": new_con_uid(),
                 "open": [mode] * n_inst,
-                "soe_loaded": bool(group.get("soe_loaded", False)),
+                "soe_schemas": ["SOE"] if group.get("soe_loaded", False) else [],
             }
     return {"pdbs": pdbs}
 
@@ -103,6 +103,13 @@ def locked_state(write=False):
                 os.replace(tmp, path)
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def schemas(pdb_state):
+    """Loaded Swingbench schemas of a PDB (older state files had a single soe_loaded flag)."""
+    if "soe_schemas" in pdb_state:
+        return pdb_state["soe_schemas"]
+    return ["SOE"] if pdb_state.get("soe_loaded") else []
 
 
 def reset_state():

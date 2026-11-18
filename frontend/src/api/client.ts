@@ -232,6 +232,7 @@ export const api = {
     return request<{ entries: AuditEntry[]; total: number; actions: string[] }>("GET", `/api/audit?${qs}`);
   },
   activeRun: () => request<{ run: Run | null }>("GET", "/api/runs/active").then((r) => r.run),
+  activeRuns: () => request<{ runs: Run[]; max_runs: number }>("GET", "/api/runs/active"),
   run: (id: string) => request<Run>("GET", `/api/runs/${id}`),
   items: (id: string) => request<{ items: RunItem[]; event_seq: number | null }>("GET", `/api/runs/${id}/items`),
   cancel: (id: string) => request<{ cancelling: boolean }>("POST", `/api/runs/${id}/cancel`),

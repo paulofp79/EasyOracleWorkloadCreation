@@ -49,6 +49,7 @@ class Settings:
     secure_cookies: bool = False       # browser reaches us over HTTPS (directly or through a proxy)
     tls_cert: Path | None = None
     tls_key: Path | None = None
+    max_runs: int = 10                 # runs active at the same time (ORCH_MAX_RUNS)
 
     @property
     def simulate(self) -> bool:
@@ -100,4 +101,12 @@ def load_settings() -> Settings:
         sim_scenario=Path(os.environ.get("ORCH_SIM_SCENARIO", STUB_DIR / "scenario.json")),
         sim_state=Path(os.environ.get("ORCH_SIM_STATE", sim_root / "state.json")),
         sim_root=sim_root,
+        max_runs=_max_runs(),
     )
+
+
+def _max_runs() -> int:
+    raw = os.environ.get("ORCH_MAX_RUNS", "10").strip()
+    if not raw.isdigit() or not 1 <= int(raw) <= 100:
+        raise SystemExit(f"ORCH_MAX_RUNS must be a number from 1 to 100, not {raw!r}")
+    return int(raw)

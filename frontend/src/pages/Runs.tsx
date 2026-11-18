@@ -30,7 +30,7 @@ function useDebounced<T>(value: T, ms = 300): T {
 export default function Runs() {
   const navigate = useNavigate();
   const [type, setType] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState(() => new URLSearchParams(window.location.search).get("status") ?? "");
   const [text, setText] = useState("");
   const [since, setSince] = useState("");
   const [limit, setLimit] = useState(PAGE);

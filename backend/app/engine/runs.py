@@ -1,4 +1,4 @@
-"""Run lifecycle: one active run at a time, item state, event publishing, cancel and recovery.
+"""Run lifecycle: concurrent runs with per-PDB conflict rules, item state, events, cancel and recovery.
 
 Item changes are kept in memory and flushed every FLUSH_S seconds: one SQLite transaction
 and one `items.patch` event per flush, so 250 near-simultaneous completions stay cheap.
@@ -37,6 +37,38 @@ class Conflict(Exception):
     def __init__(self, message: str, run_id: str):
         super().__init__(message)
         self.run_id = run_id
+
+
+# Which runs may touch the same PDB at the same time. A claim is (type, schema user(s)):
+#  * create / drop need the PDB to themselves;
+#  * a load or an increase of schema S excludes another load / increase of S and a workload on S
+#    in that PDB;
+#  * everything else (checks, several workloads, loads of different schemas) may overlap.
+EXCLUSIVE = {"create", "drop"}
+WRITERS = {"load": "loaded", "increase": "increased"}
+DOING = {"load": "loading", "increase": "increasing", "workload": "a workload on"}
+
+
+def claim(op) -> tuple[str, frozenset[str]]:
+    from ..naming import schema_user
+    if hasattr(op, "schema_list"):                 # Increase SOE: one or several schemas
+        return op.type, frozenset(op.schema_list())
+    return op.type, frozenset({schema_user(op.params.get("schema_prefix", "") or "")})
+
+
+def clash(a: tuple[str, Any], b: tuple[str, Any]) -> str | None:
+    """Why runs with claims a and b cannot share a PDB, or None. Schemas: one name or a set of names."""
+    (ta, sa), (tb, sb) = a, b
+    if ta in EXCLUSIVE or tb in EXCLUSIVE:
+        return "creating or dropping a PDB needs it to itself"
+    sa, sb = ({s} if isinstance(s, str) else set(s) for s in (sa, sb))
+    common = ", ".join(sorted(sa & sb))
+    if not common or not (ta in WRITERS or tb in WRITERS) or not {ta, tb} <= {*WRITERS, "workload"}:
+        return None
+    if ta == tb:
+        return f"{common} is being {WRITERS[ta]} there"
+    first, second = (ta, tb) if ta in WRITERS else (tb, ta)
+    return f"{DOING[first]} {common} and {DOING[second]} {common} cannot overlap"
 
 
 def new_run_id() -> str:
@@ -136,8 +168,8 @@ class RunManager:
     def __init__(self, settings: Settings, db: Database):
         self.settings = settings
         self.db = db
-        self.active: RunContext | None = None
-        self.task: asyncio.Task | None = None
+        self.active: dict[str, RunContext] = {}          # run_id -> context, in start order
+        self.tasks: dict[str, asyncio.Task] = {}
         self.buses: collections.OrderedDict[str, EventBus] = collections.OrderedDict()
         self.contexts: dict[str, RunContext] = {}
         self._lock = asyncio.Lock()
@@ -164,15 +196,13 @@ class RunManager:
         run["total"] = sum(run["counts"].values())
         bus = self.buses.get(run_id)
         run["event_seq"] = bus.seq if bus else None
-        run["live"] = bool(ctx and self.active is ctx)
+        run["live"] = run_id in self.active
         return run
 
     async def start(self, op, actor: str, retry_of: str | None = None) -> str:
         async with self._lock:
-            if self.active is not None:
-                raise Conflict(f"run {self.active.run_id} ({self.active.type}) is still in progress",
-                               self.active.run_id)
             pdbs = op.targets()
+            self._check_conflicts(op, pdbs)
             run_id = new_run_id()
             run_dir = make_run_dir(op.params["log_dir"], run_id)
             now = utcnow()
@@ -181,15 +211,34 @@ class RunManager:
                    "started_at": now}
             self.db.insert_run(run, pdbs)
             ctx = RunContext(self, run, pdbs, op, actor)
-            self.active = ctx
+            self.active[run_id] = ctx
             self.contexts[run_id] = ctx
             self.buses[run_id] = ctx.bus
             while len(self.buses) > KEEP_BUSES:
-                old, _ = self.buses.popitem(last=False)
+                old = next((k for k in self.buses if k not in self.active), None)
+                if old is None:
+                    break
+                del self.buses[old]
                 self.contexts.pop(old, None)
             self.db.audit(actor, "start", run_id, {"type": op.type, **op.params})
-            self.task = asyncio.create_task(self._run(ctx))
+            self.tasks[run_id] = asyncio.create_task(self._run(ctx))
             return run_id
+
+    def _check_conflicts(self, op, pdbs: list[str]) -> None:
+        if len(self.active) >= self.settings.max_runs:
+            first = next(iter(self.active.values()))
+            raise Conflict(f"{len(self.active)} runs are already in progress (the limit is "
+                           f"{self.settings.max_runs}, ORCH_MAX_RUNS); wait for one to finish", first.run_id)
+        mine, wanted = claim(op), {p.split(":", 1)[0] for p in pdbs}   # items may be PDB:SCHEMA
+        for ctx in self.active.values():
+            why = clash(mine, claim(ctx.op))
+            if why is None:
+                continue
+            busy = sorted(wanted & {k.split(":", 1)[0] for k in ctx.items})
+            if busy:
+                names = ", ".join(busy[:5]) + (f" and {len(busy) - 5} more" if len(busy) > 5 else "")
+                raise Conflict(f"run {ctx.run_id} ({ctx.type}) is still in progress on {names}: {why}. "
+                               f"Wait for it, stop it, or choose other PDBs.", ctx.run_id)
 
     async def _run(self, ctx: RunContext) -> None:
         flusher = asyncio.create_task(self._flush_loop(ctx))
@@ -227,7 +276,8 @@ class RunManager:
             ctx.update_run(**fields)
             ctx.log(f"run finished: {status} {summary.get('counts')}")
             ctx.bus.close()
-            self.active = None
+            self.active.pop(ctx.run_id, None)
+            self.tasks.pop(ctx.run_id, None)
             ctx.op.secrets = {}          # drop secrets with the run
 
     async def _flush_loop(self, ctx: RunContext) -> None:
@@ -244,8 +294,8 @@ class RunManager:
             ctx.bus.publish("heartbeat", {"elapsed_s": round(ctx.elapsed(), 1), "counts": ctx.counts()})
 
     async def cancel(self, run_id: str, actor: str) -> bool:
-        ctx = self.active
-        if ctx is None or ctx.run_id != run_id:
+        ctx = self.active.get(run_id)
+        if ctx is None:
             return False
         if not ctx.cancelled:
             ctx.cancelled = True
@@ -255,10 +305,12 @@ class RunManager:
         return True
 
     async def shutdown(self) -> None:
-        if self.active is not None and self.task is not None:
-            self.active.cancelled = True
-            await self.active.runner.kill_all()
-            try:
-                await asyncio.wait_for(asyncio.shield(self.task), timeout=10)
-            except asyncio.TimeoutError:
-                self.task.cancel()
+        contexts, tasks = list(self.active.values()), list(self.tasks.values())
+        for ctx in contexts:
+            ctx.cancelled = True
+        await asyncio.gather(*(ctx.runner.kill_all() for ctx in contexts), return_exceptions=True)
+        if tasks:
+            _, pending = await asyncio.wait([asyncio.shield(t) for t in tasks], timeout=10)
+            if pending:
+                for t in tasks:
+                    t.cancel()

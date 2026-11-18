@@ -71,7 +71,7 @@ Large text (logs, SQL*Plus output, results XML) stays on disk in the run dir: `<
 
 **Restart recovery**: on startup every run in `running` becomes `interrupted`. For each item with a pgid, liveness is checked (`killpg(pgid,0)` + start time match against `/proc`, which guards against PID reuse); the run detail shows "N processes from this run are still alive" with a **Kill leftovers** button. Logs are kept untouched.
 
-**One active run**: `RunManager` holds a single lock; a second `POST /runs` gets `409` with the active run id. Env-check and inventory reads are not runs and are always allowed.
+**Concurrent runs** (changed, see §13): runs may overlap; `RunManager` rejects a run with `409` (and the blocking run id) only when it would clash on a PDB with an active run, or when `ORCH_MAX_RUNS` runs are active. Env-check and inventory reads are not runs and are always allowed.
 
 ## 5. Events and SSE
 
@@ -166,7 +166,17 @@ audit log records the logged-in user as actor.
   PDB removes all its markers. The inventory returns `soe_schemas` per PDB; the PDBs page lists them.
 * The scripts only know SOE, so the "Equivalent command" carries a `# app: schema …` note.
 
-## 13. Change: Increase SOE (sbutil -dup)
+## 13. Change: concurrent runs
+
+* `RunManager.active` is a map of run id → context (was a single slot). `start()` refuses a run only if
+  (a) `ORCH_MAX_RUNS` (default 10) runs are active, or (b) it shares a PDB with an active run whose
+  claim clashes: create/drop clash with everything; a load of schema S clashes with a load of S and a
+  workload on S. Checks, several workloads and loads of different schemas overlap freely.
+* The 409 body keeps `{error, run_id}`; the message names the busy PDBs and the reason, the UI links to
+  the blocking run. `/api/runs/active` returns `runs` (all) plus `run` (the oldest, for old clients).
+* Cancel, SSE streams, shutdown (stops every active run) and startup recovery work per run.
+
+## 14. Change: Increase SOE (sbutil -dup)
 
 * New run type `increase` (`ops/grow_soe.py`), page `/increase`, button on the PDBs page. Command:
   `sbutil -u <user> -p <pw> -cs //scan:port/service -soe -parallel <sbutil_parallel> -dup <dup>`
@@ -181,3 +191,5 @@ audit log records the logged-in user as actor.
 * Retry: `Operation.retry_params()` hook; for `increase` the unfinished items become `targets`
   (rule `schema_targets`, `PDB:SCHEMA`), so a retry never grows a schema that already succeeded.
 * Simulation: `tools/stubs/sbutil` (state `soe_dup` per schema); scenario `PDBPP_037: {"grow": "fail"}`.
+* Concurrent runs (§13): an increase claims all its schemas; it clashes with a load or increase of
+  any of them and a workload on any of them in a shared PDB (item keys `PDB:SCHEMA` count as the PDB).

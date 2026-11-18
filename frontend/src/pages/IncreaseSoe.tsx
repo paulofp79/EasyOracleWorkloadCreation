@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import FormError from "../components/FormError";
 import { api, ApiError, type Plan } from "../api/client";
 import { FormField } from "../components/FormField";
 import { useSession } from "../components/SysSession";
@@ -208,7 +209,7 @@ export default function IncreaseSoe() {
             </div>
           </div>
         )}
-        {formError && <div className="error-box">{formError}</div>}
+        <FormError text={formError} />
         <div className="actions">
           <button type="button" className="btn" disabled={hasErrors || planM.isPending} onClick={() => planM.mutate()}>
             {planM.isPending ? "Planning…" : plan ? "Plan again" : "Plan / dry run"}

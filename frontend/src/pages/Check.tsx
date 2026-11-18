@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import FormError from "../components/FormError";
 import { api, ApiError, type Plan } from "../api/client";
 import { FormField } from "../components/FormField";
 import { validateParams } from "../validators";
@@ -106,7 +107,7 @@ export default function Check() {
           </div>
         </fieldset>
 
-        {formError && <div className="error-box">{formError}</div>}
+        <FormError text={formError} />
         {plan && (
           <div className="plan">
             <h2>Plan</h2>
@@ -133,7 +134,6 @@ export default function Check() {
             {startM.isPending ? "Starting…" : "Start check"}
           </button>
         </div>
-        {formError.includes("still in progress") && <p className="small"><Link to="/runs">See the active run →</Link></p>}
       </form>
     </>
   );
